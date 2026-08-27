@@ -1,0 +1,16 @@
+.DS_Store
+.dart_tool/
+.flutter-plugins-dependencies
+build/
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Runner/GoogleService-Info.plist
+*.p8
+*.p12
+*.pem
+*.mobileprovision
+ExportOptions.plist
+.env
+.env.*
