@@ -55,6 +55,7 @@ class PushNotificationService {
             sound: true,
           );
       await _registerCurrentToken(messaging);
+      await NativeCallService.syncAppleVoipToken();
 
       _tokenRefreshSubscription ??= messaging.onTokenRefresh.listen((token) {
         unawaited(_registerToken(token));

@@ -84,6 +84,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _logout() async {
+    try {
+      await ApiService.unregisterAppleVoipDevice();
+    } catch (_) {}
     await LocalCacheService.clearAuth();
     ReservationStore.reservations.clear();
     ApiService.userToken = null;

@@ -339,6 +339,9 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Future<void> _logout() async {
+    try {
+      await ApiService.unregisterAppleVoipDevice();
+    } catch (_) {}
     await LocalCacheService.clearAuth();
     ApiService.userToken = null;
     ApiService.currentUser = null;

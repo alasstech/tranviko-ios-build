@@ -19,14 +19,14 @@
 
 ## Appels natifs
 
-Les appels quand l'application est ouverte utilisent deja LiveKit et CallKit. Les appels fiables lorsque l'application est terminee exigent en plus :
+Les appels quand l'application est ouverte utilisent LiveKit et CallKit. Pour l'etat termine, Tranviko implemente aussi :
 
 - un jeton PushKit VoIP enregistre par appareil ;
 - un endpoint backend dedie a ces jetons ;
 - un envoi APNs avec `apns-push-type: voip`, le topic `app.tranviko.mobile.voip` et une expiration tres courte ;
 - un signalement immediat de chaque push VoIP a CallKit.
 
-La couche iOS est preparee pour recevoir PushKit et afficher CallKit. Le raccordement serveur des jetons VoIP doit etre termine et teste sur deux iPhone reels avant publication. Un push FCM standard ne remplace pas ce canal lorsque l'application est forcee a quitter.
+La couche iOS enregistre le jeton PushKit dans le backend authentifie. Le backend signe ensuite ses requetes APNs VoIP avec la cle Apple conservee uniquement sur le VPS. Il evite le doublon FCM/PushKit appareil par appareil. Le deploiement de la cle et le test sur deux vrais iPhone restent obligatoires avant publication. Un push FCM standard ne remplace pas ce canal lorsque l'application est forcee a quitter.
 
 ## Controle avant TestFlight
 

@@ -43,3 +43,13 @@ L'IPA est generee dans `build/ios/ipa/`. Les symboles d'obfuscation restent dans
 Ne jamais envoyer dans Git une cle `.p8`, `.p12`, un profil `.mobileprovision`, un mot de passe, une cle LiveKit serveur ou un compte de service Firebase.
 
 Voir aussi `APPLE_FIREBASE_SETUP.md`.
+
+## Acces au depot prive
+
+Le proprietaire ouvre le depot GitHub, puis `Settings > Collaborators and teams > Add people` et invite le nom d'utilisateur GitHub du developpeur Mac. Le developpeur accepte l'invitation recue par email ou dans GitHub, puis clone normalement le depot :
+
+```bash
+git clone https://github.com/alasstech/tranviko-ios-build.git
+```
+
+Ne partagez ni votre mot de passe GitHub, ni un Personal Access Token, ni la cle Apple `.p8`. L'acces du collaborateur pourra etre retire apres la compilation.

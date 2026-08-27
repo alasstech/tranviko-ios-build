@@ -9,6 +9,8 @@ import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'api_service.dart';
+
 class NativeCallService {
   static const Duration _acceptedNativeEndGrace = Duration(seconds: 4);
   static const Duration _incomingDedupeWindow = Duration(seconds: 90);
@@ -38,6 +40,26 @@ class NativeCallService {
     onCallDeclined = onDeclined;
     onCallEnded = onEnded;
     _eventSubscription ??= FlutterCallkitIncoming.onEvent.listen(_handleEvent);
+    unawaited(syncAppleVoipToken());
+  }
+
+  static Future<void> syncAppleVoipToken({bool allowDeactivate = false}) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) return;
+    if (ApiService.activeToken == null) return;
+    try {
+      final rawToken = await FlutterCallkitIncoming.getDevicePushTokenVoIP();
+      final token = (rawToken ?? '')
+          .replaceAll(RegExp(r'[\s<>]'), '')
+          .toLowerCase();
+      if (token.isEmpty && !allowDeactivate) return;
+      await ApiService.registerAppleVoipDevice(
+        token: token,
+        environment: kDebugMode ? 'development' : 'production',
+        active: token.isNotEmpty,
+      );
+    } catch (error) {
+      debugPrint('Apple VoIP token registration failed: $error');
+    }
   }
 
   static Future<void> requestPermissions({bool force = false}) async {
@@ -225,6 +247,10 @@ class NativeCallService {
 
   static void _handleEvent(CallEvent? event) {
     if (event == null) return;
+    if (event is CallEventActionDidUpdateDevicePushTokenVoip) {
+      unawaited(syncAppleVoipToken(allowDeactivate: true));
+      return;
+    }
     CallKitParams? params;
     if (event is CallEventActionCallAccept) params = event.callKitParams;
     if (event is CallEventActionCallDecline) params = event.callKitParams;

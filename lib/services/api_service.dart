@@ -300,6 +300,9 @@ class ApiService {
   }
 
   static Future<void> clearAccountSession() async {
+    try {
+      await unregisterAppleVoipDevice();
+    } catch (_) {}
     userToken = null;
     agentToken = null;
     currentUser = null;
@@ -1956,5 +1959,43 @@ class ApiService {
     );
     _ensureSuccess(response);
     return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> registerAppleVoipDevice({
+    required String token,
+    required String environment,
+    bool active = true,
+  }) async {
+    final metadata = await deviceMetadata();
+    final response = await http.post(
+      Uri.parse('$baseUrl/push/voip/register/'),
+      headers: {'Content-Type': 'application/json', ..._accountHeaders()},
+      body: jsonEncode({
+        'token': token,
+        'environment': environment,
+        'active': active,
+        'bundleId': 'app.tranviko.mobile',
+        ...metadata,
+      }),
+    );
+    _ensureSuccess(response);
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<void> unregisterAppleVoipDevice() async {
+    if (activeToken == null) return;
+    final metadata = await deviceMetadata();
+    final response = await http.post(
+      Uri.parse('$baseUrl/push/voip/register/'),
+      headers: {'Content-Type': 'application/json', ..._accountHeaders()},
+      body: jsonEncode({
+        'token': '',
+        'environment': kDebugMode ? 'development' : 'production',
+        'active': false,
+        'bundleId': 'app.tranviko.mobile',
+        ...metadata,
+      }),
+    );
+    _ensureSuccess(response);
   }
 }
