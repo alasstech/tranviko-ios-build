@@ -11,11 +11,12 @@
 
 1. Enregistrer l'App ID explicite `app.tranviko.mobile` dans Certificates, Identifiers & Profiles.
 2. Activer Push Notifications pour cet App ID.
-3. Creer une cle APNs `.p8`, conserver son Key ID et relever le Team ID. Le fichier ne se telecharge qu'une fois.
-4. Dans Firebase > Parametres du projet > Cloud Messaging, televerser la cle APNs pour l'application iOS Tranviko.
-5. Inviter le developpeur Mac dans l'equipe Apple/App Store Connect. Ne pas partager le mot de passe du proprietaire.
-6. Dans Xcode, choisir cette equipe et laisser Automatically manage signing actif.
-7. Verifier Push Notifications et Background Modes : Background fetch, Remote notifications, Voice over IP et Location updates.
+3. Creer deux cles APNs `.p8`, une `Sandbox` et une `Production`, conserver leurs Key ID et relever le Team ID. Chaque fichier ne se telecharge qu'une fois.
+4. Preferer des cles `Topic Specific` limitees a Tranviko et autorisant `app.tranviko.mobile.voip`. Autoriser aussi `app.tranviko.mobile` si elles sont reutilisees par Firebase pour les notifications ordinaires ; utiliser `Team Scoped` si Apple ne propose pas les topics necessaires.
+5. Dans Firebase > Parametres du projet > Cloud Messaging, televerser les cles APNs dans les emplacements proposes pour l'application iOS Tranviko.
+6. Inviter le developpeur Mac dans l'equipe Apple/App Store Connect. Ne pas partager le mot de passe du proprietaire.
+7. Dans Xcode, choisir cette equipe et laisser Automatically manage signing actif.
+8. Verifier Push Notifications et Background Modes : Background fetch, Remote notifications, Voice over IP et Location updates.
 
 ## Appels natifs
 
