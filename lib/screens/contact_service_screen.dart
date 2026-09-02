@@ -186,10 +186,12 @@ class _ContactServiceScreenState extends State<ContactServiceScreen> {
                         ),
                         validator: (value) {
                           final text = value?.trim() ?? '';
-                          if (text.isEmpty)
+                          if (text.isEmpty) {
                             return appTC(context, 'emailRequired');
-                          if (!text.contains('@'))
+                          }
+                          if (!text.contains('@')) {
                             return appTC(context, 'invalidEmail');
+                          }
                           return null;
                         },
                       ),
