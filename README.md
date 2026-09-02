@@ -14,11 +14,12 @@ Ce depot contient uniquement l'application Flutter partagee, sa cible iOS et les
 ## Premier lancement
 
 1. Lire `GUIDE_COMPLET_IOS.md` avant de modifier Xcode.
-2. Lancer `flutter doctor -v` et corriger les erreurs iOS.
-3. Placer le fichier Firebase iOS dans `ios/Runner/GoogleService-Info.plist`.
-4. Lancer `./scripts/verify_ios_setup.sh`.
-5. Ouvrir `ios/Runner.xcworkspace`, selectionner Runner, puis l'equipe Apple Tranviko dans Signing & Capabilities.
-6. Tester sur deux vrais iPhone les notifications, CallKit, la camera, le micro, la localisation et LiveKit.
+2. Verifier l'integrite du clone avec `shasum -a 256 -c SOURCE_MANIFEST.sha256`.
+3. Lancer `flutter doctor -v` et corriger les erreurs iOS.
+4. Placer le fichier Firebase iOS dans `ios/Runner/GoogleService-Info.plist`.
+5. Lancer `./scripts/verify_ios_setup.sh`.
+6. Ouvrir `ios/Runner.xcworkspace`, selectionner Runner, puis l'equipe Apple Tranviko dans Signing & Capabilities.
+7. Tester sur deux vrais iPhone les notifications, CallKit, la camera, le micro, la localisation et LiveKit.
 
 ## Compilation sans signature
 
