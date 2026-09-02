@@ -479,7 +479,7 @@ class _DigitalTicket extends StatelessWidget {
                     style: TextStyle(
                       color: scheme.onSurfaceVariant,
                       fontSize: 10,
-                      letterSpacing: .8,
+                      letterSpacing: 0,
                       fontWeight: FontWeight.w800,
                     ),
                   ),

@@ -50,15 +50,19 @@ import flutter_callkit_incoming
       return
     }
 
-    let values = payload.dictionaryPayload.reduce(into: [String: Any]()) {
+    var values = payload.dictionaryPayload.reduce(into: [String: Any]()) {
       result, item in
       if let key = item.key as? String {
         result[key] = item.value
       }
     }
-    let callId = (values["callId"] as? String)
+    let signallingCallId = (values["callId"] as? String)
       ?? (values["id"] as? String)
       ?? UUID().uuidString
+    let callId = UUID(uuidString: signallingCallId)?.uuidString
+      ?? UUID().uuidString
+    values["callId"] = signallingCallId
+    values["nativeCallId"] = callId
     let callerName = (values["callerName"] as? String)
       ?? (values["nameCaller"] as? String)
       ?? (values["title"] as? String)

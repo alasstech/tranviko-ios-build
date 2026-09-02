@@ -9,12 +9,12 @@ API_BASE_URL="${API_BASE_URL:-https://tranviko.app/api}"
 BUILD_NUMBER="$(sed -nE 's/^version:.*\+([0-9]+)$/\1/p' pubspec.yaml | head -n 1)"
 [[ -n "$BUILD_NUMBER" ]] || { echo 'Version Flutter invalide.' >&2; exit 1; }
 
-./scripts/verify_ios_setup.sh
 flutter pub get
 (
   cd ios
   pod install --repo-update
 )
+./scripts/verify_ios_setup.sh
 
 COMMON_ARGS=(
   --release
@@ -30,9 +30,19 @@ fi
 
 SYMBOLS_DIR="build/symbols/ios/$BUILD_NUMBER"
 mkdir -p "$SYMBOLS_DIR"
-flutter build ipa "${COMMON_ARGS[@]}" \
-  --obfuscate \
+IPA_ARGS=(
+  "${COMMON_ARGS[@]}"
+  --obfuscate
   "--split-debug-info=$SYMBOLS_DIR"
+)
+if [[ -n "${EXPORT_OPTIONS_PLIST:-}" ]]; then
+  [[ -f "$EXPORT_OPTIONS_PLIST" ]] || {
+    echo "ExportOptions.plist introuvable: $EXPORT_OPTIONS_PLIST" >&2
+    exit 1
+  }
+  IPA_ARGS+=("--export-options-plist=$EXPORT_OPTIONS_PLIST")
+fi
+flutter build ipa "${IPA_ARGS[@]}"
 
 echo "IPA generee dans build/ios/ipa/."
 echo "Conservez les symboles : $SYMBOLS_DIR"

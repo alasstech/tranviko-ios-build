@@ -1,16 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as raw_http;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-final _BoundedHttpClient http = _BoundedHttpClient();
+final BoundedHttpClient http = BoundedHttpClient();
 
-class _BoundedHttpClient {
+class BoundedHttpClient {
   static const Duration _defaultTimeout = Duration(seconds: 30);
   static const Duration _authTimeout = Duration(seconds: 12);
 
@@ -21,9 +21,51 @@ class _BoundedHttpClient {
     Uri url,
     Future<raw_http.Response> request,
   ) async {
+    final stopwatch = Stopwatch()..start();
     try {
-      return await request.timeout(_timeoutFor(url));
+      final response = await request.timeout(_timeoutFor(url));
+      stopwatch.stop();
+      if (!url.path.contains('/client-diagnostics/')) {
+        if (response.statusCode >= 500) {
+          unawaited(
+            ApiService.reportClientDiagnostic(
+              eventType: 'http_error',
+              severity: 'error',
+              message: 'HTTP ${response.statusCode} sur ${url.path}',
+              screen: url.path,
+              extra: {
+                'methodEndpoint': url.path,
+                'statusCode': response.statusCode,
+                'durationMs': stopwatch.elapsedMilliseconds,
+              },
+            ),
+          );
+        } else if (stopwatch.elapsedMilliseconds >= 8000) {
+          unawaited(
+            ApiService.reportClientDiagnostic(
+              eventType: 'performance',
+              severity: 'warning',
+              message: 'Requete lente sur ${url.path}',
+              screen: url.path,
+              extra: {'durationMs': stopwatch.elapsedMilliseconds},
+            ),
+          );
+        }
+      }
+      return response;
     } on TimeoutException {
+      stopwatch.stop();
+      if (!url.path.contains('/client-diagnostics/')) {
+        unawaited(
+          ApiService.reportClientDiagnostic(
+            eventType: 'http_error',
+            severity: 'warning',
+            message: 'Delai reseau depasse sur ${url.path}',
+            screen: url.path,
+            extra: {'durationMs': stopwatch.elapsedMilliseconds},
+          ),
+        );
+      }
       throw const ApiException(
         'La connexion est trop lente. Verifiez le reseau puis reessayez.',
         statusCode: 408,
@@ -60,7 +102,10 @@ class _BoundedHttpClient {
     Map<String, String>? headers,
     Object? body,
     Encoding? encoding,
-  }) => raw_http.put(url, headers: headers, body: body, encoding: encoding);
+  }) => _bounded(
+    url,
+    raw_http.put(url, headers: headers, body: body, encoding: encoding),
+  );
 
   Future<raw_http.Response> delete(
     Uri url, {
@@ -114,6 +159,9 @@ class ApiService {
       ? null
       : _configuredCompanySlug;
   static String? _callDeviceId;
+  static PackageInfo? _packageInfo;
+  static bool _flushingDiagnostics = false;
+  static const String _queuedDiagnosticsKey = 'queued_client_diagnostics_v1';
 
   static String get baseUrl {
     const configured = String.fromEnvironment(
@@ -189,6 +237,7 @@ class ApiService {
     final id = await callDeviceId();
     var platform = 'unknown';
     var name = '';
+    var osVersion = '';
     try {
       final plugin = DeviceInfoPlugin();
       if (kIsWeb) {
@@ -205,27 +254,33 @@ class ApiService {
             name = model.toLowerCase().contains(brand.toLowerCase())
                 ? model
                 : '$brand $model'.trim();
+            osVersion =
+                'Android ${info.version.release} (SDK ${info.version.sdkInt})';
             break;
           case TargetPlatform.iOS:
             final info = await plugin.iosInfo;
             platform = 'ios';
             name = (info.name.trim().isNotEmpty ? info.name : info.model)
                 .trim();
+            osVersion = '${info.systemName} ${info.systemVersion}'.trim();
             break;
           case TargetPlatform.windows:
             final info = await plugin.windowsInfo;
             platform = 'windows';
             name = 'Desktop-${info.computerName}'.trim();
+            osVersion = info.displayVersion.trim();
             break;
           case TargetPlatform.macOS:
             final info = await plugin.macOsInfo;
             platform = 'macos';
             name = info.computerName.trim();
+            osVersion = info.osRelease.trim();
             break;
           case TargetPlatform.linux:
             final info = await plugin.linuxInfo;
             platform = 'linux';
             name = info.prettyName.trim();
+            osVersion = info.version ?? info.prettyName;
             break;
           default:
             break;
@@ -236,7 +291,12 @@ class ApiService {
       final suffix = id.length > 6 ? id.substring(id.length - 6) : id;
       name = "${platform == 'unknown' ? 'Appareil' : platform}-$suffix";
     }
-    return {'deviceId': id, 'deviceName': name, 'platform': platform};
+    return {
+      'deviceId': id,
+      'deviceName': name,
+      'platform': platform,
+      'osVersion': osVersion,
+    };
   }
 
   static Future<void> persistTravelerSession(
@@ -1997,5 +2057,110 @@ class ApiService {
       }),
     );
     _ensureSuccess(response);
+  }
+
+  static Future<void> reportClientDiagnostic({
+    required String eventType,
+    required String severity,
+    required String message,
+    String stack = '',
+    String screen = '',
+    Map<String, dynamic>? extra,
+  }) async {
+    Map<String, dynamic>? body;
+    try {
+      final metadata = await deviceMetadata().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => const <String, String>{},
+      );
+      _packageInfo ??= await PackageInfo.fromPlatform().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => PackageInfo(
+          appName: 'Tranviko',
+          packageName: 'app.tranviko.mobile',
+          version: 'unknown',
+          buildNumber: 'unknown',
+        ),
+      );
+      final platform = metadata['platform'] ?? defaultTargetPlatform.name;
+      body = <String, dynamic>{
+        'eventType': eventType,
+        'severity': severity,
+        'platform': platform,
+        'appVersion': _packageInfo?.version ?? 'unknown',
+        'buildNumber': _packageInfo?.buildNumber ?? 'unknown',
+        'releaseChannel': kReleaseMode ? 'release' : 'debug',
+        'screen': screen,
+        'message': message.length > 700 ? message.substring(0, 700) : message,
+        'stack': stack.length > 6000 ? stack.substring(0, 6000) : stack,
+        'deviceId': metadata['deviceId'] ?? '',
+        'deviceName': metadata['deviceName'] ?? '',
+        'osVersion': metadata['osVersion'] ?? '',
+        'extra': extra ?? const <String, dynamic>{},
+      };
+      await _sendDiagnosticBody(body);
+      unawaited(flushQueuedClientDiagnostics());
+    } catch (_) {
+      if (body != null) await _queueDiagnostic(body);
+    }
+  }
+
+  static Future<void> _sendDiagnosticBody(Map<String, dynamic> body) async {
+    final response = await raw_http
+        .post(
+          Uri.parse('$baseUrl/client-diagnostics/'),
+          headers: {'Content-Type': 'application/json', ..._accountHeaders()},
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 5));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError('Diagnostic refuse (${response.statusCode})');
+    }
+  }
+
+  static Future<void> _queueDiagnostic(Map<String, dynamic> body) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final queued = prefs.getStringList(_queuedDiagnosticsKey) ?? <String>[];
+      queued.add(jsonEncode(body));
+      while (queued.length > 30) {
+        queued.removeAt(0);
+      }
+      await prefs.setStringList(_queuedDiagnosticsKey, queued);
+    } catch (_) {}
+  }
+
+  static Future<void> flushQueuedClientDiagnostics() async {
+    if (_flushingDiagnostics) return;
+    _flushingDiagnostics = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final queued = List<String>.from(
+        prefs.getStringList(_queuedDiagnosticsKey) ?? const <String>[],
+      );
+      if (queued.isEmpty) return;
+      final remaining = <String>[];
+      for (var index = 0; index < queued.length; index += 1) {
+        final raw = queued[index];
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is Map) {
+            await _sendDiagnosticBody(Map<String, dynamic>.from(decoded));
+          }
+        } catch (_) {
+          remaining.addAll(queued.skip(index));
+          break;
+        }
+      }
+      if (remaining.isEmpty) {
+        await prefs.remove(_queuedDiagnosticsKey);
+      } else {
+        await prefs.setStringList(_queuedDiagnosticsKey, remaining);
+      }
+    } catch (_) {
+      // The queue remains available for the next connected launch.
+    } finally {
+      _flushingDiagnostics = false;
+    }
   }
 }

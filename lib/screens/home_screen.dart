@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -20,8 +19,10 @@ import 'package:video_player/video_player.dart';
 import '../models/bus_selection_args.dart';
 import '../l10n/app_text.dart';
 import '../services/api_service.dart';
+import '../services/interaction_feedback_service.dart';
 import '../services/screen_awake_service.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/location_permission_disclosure.dart';
 
 const Color _royalBlue = Color(0xFF2563EB);
 const Color _iceBlue = Color(0xFFE3F2FD);
@@ -194,6 +195,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     try {
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
+        if (!mounted) return;
+        final disclosed = await showLocationPermissionDisclosure(context);
+        if (!disclosed) return;
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.denied ||
@@ -416,8 +420,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => WillPopScope(
-        onWillPop: () async => false,
+      builder: (_) => PopScope(
+        canPop: false,
         child: AlertDialog(
           icon: Icon(
             Icons.construction_rounded,
@@ -450,8 +454,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     await showDialog<void>(
       context: context,
       barrierDismissible: !forced,
-      builder: (_) => WillPopScope(
-        onWillPop: () async => !forced,
+      builder: (_) => PopScope(
+        canPop: !forced,
         child: AlertDialog(
           icon: Icon(
             forced
@@ -628,9 +632,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
         children: [
-          const Positioned.fill(
-            child: IgnorePointer(child: _HomeOrganicBackground()),
-          ),
           FadeTransition(
             opacity: _fadeAnimation,
             child: CustomScrollView(
@@ -700,6 +701,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ? 32.0
         : 20.0;
     final scheme = Theme.of(context).colorScheme;
+    final companyLabel = _companySlogan.trim().isEmpty
+        ? _companyName
+        : '$_companyName | $_companySlogan';
     return Container(
       padding: EdgeInsets.fromLTRB(
         horizontalPadding,
@@ -708,17 +712,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         24,
       ),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            scheme.primary,
-            Color.lerp(scheme.primary, scheme.secondary, .55)!,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: scheme.primary,
         borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(36),
-          bottomRight: Radius.circular(36),
+          bottomLeft: Radius.circular(8),
+          bottomRight: Radius.circular(8),
         ),
       ),
       child: Column(
@@ -731,18 +728,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 padding: const EdgeInsets.all(5),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: Colors.white.withOpacity(.55)),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: .55),
+                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(.16),
+                      color: Colors.black.withValues(alpha: .16),
                       blurRadius: 18,
                       offset: const Offset(0, 8),
                     ),
                   ],
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(11),
+                  borderRadius: BorderRadius.circular(6),
                   child: Image.asset('logo.png', fit: BoxFit.cover),
                 ),
               ),
@@ -754,10 +753,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     Text(
                       appTC(context, 'homeBrand').toUpperCase(),
                       style: TextStyle(
-                        color: Colors.white.withOpacity(.74),
+                        color: Colors.white.withValues(alpha: .74),
                         fontSize: 10,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 1.4,
+                        letterSpacing: 0,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -782,8 +781,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   margin: const EdgeInsets.only(left: 8, right: 8),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.16),
-                    border: Border.all(color: Colors.white.withOpacity(0.36)),
+                    color: Colors.white.withValues(alpha: .16),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: .36),
+                    ),
                   ),
                   child: const Icon(
                     Icons.notifications_rounded,
@@ -802,8 +803,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   height: 46,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.18),
-                    border: Border.all(color: Colors.white.withOpacity(0.42)),
+                    color: Colors.white.withValues(alpha: .18),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: .42),
+                    ),
                     image: _accountPhotoImage() == null
                         ? null
                         : DecorationImage(
@@ -828,12 +831,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(.14),
-                borderRadius: BorderRadius.circular(99),
-                border: Border.all(color: Colors.white.withOpacity(.22)),
+                color: Colors.white.withValues(alpha: .14),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white.withValues(alpha: .22)),
               ),
               child: Text(
-                _companyName,
+                companyLabel,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -863,7 +866,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               );
             },
             child: _GlassBox(
-              radius: 22,
+              radius: 8,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
               child: Row(
                 children: [
@@ -1052,12 +1055,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: scheme.outlineVariant),
           boxShadow: [
             BoxShadow(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.10),
-              blurRadius: 28,
-              offset: const Offset(0, 14),
+              color: Colors.black.withValues(alpha: .06),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
@@ -1096,7 +1100,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: scheme.primary.withOpacity(0.28),
+                        color: scheme.primary.withValues(alpha: .28),
                         blurRadius: 18,
                         offset: const Offset(0, 8),
                       ),
@@ -1267,59 +1271,108 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: scheme.primary,
-          borderRadius: BorderRadius.circular(28),
-          image: const DecorationImage(
-            image: NetworkImage(
-              'https://images.unsplash.com/photo-1516426122078-c23e76319801?auto=format&fit=crop&w=1200&q=80',
-            ),
-            fit: BoxFit.cover,
-            opacity: 0.22,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.18),
-                borderRadius: BorderRadius.circular(30),
-              ),
-              child: Text(
-                appTC(context, 'liveGps'),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
+      child: Material(
+        color: scheme.secondary,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => Navigator.pushNamed(context, '/package_tracking'),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: scheme.onSecondary.withValues(alpha: .14),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.directions_bus_filled_rounded,
+                        color: scheme.onSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 13),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            appTC(context, 'liveGps'),
+                            style: TextStyle(
+                              color: scheme.onSecondary.withValues(alpha: .78),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            appTC(context, 'liveBusTitle'),
+                            style: TextStyle(
+                              color: scheme.onSecondary,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      color: scheme.onSecondary,
+                    ),
+                  ],
                 ),
-              ),
+                const SizedBox(height: 22),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.trip_origin_rounded,
+                      size: 18,
+                      color: scheme.onSecondary,
+                    ),
+                    Expanded(
+                      child: Container(
+                        height: 2,
+                        margin: const EdgeInsets.symmetric(horizontal: 9),
+                        color: scheme.onSecondary.withValues(alpha: .36),
+                      ),
+                    ),
+                    Icon(
+                      Icons.directions_bus_rounded,
+                      size: 22,
+                      color: scheme.onSecondary,
+                    ),
+                    Expanded(
+                      child: Container(
+                        height: 2,
+                        margin: const EdgeInsets.symmetric(horizontal: 9),
+                        color: scheme.onSecondary.withValues(alpha: .36),
+                      ),
+                    ),
+                    Icon(
+                      Icons.location_on_rounded,
+                      size: 20,
+                      color: scheme.onSecondary,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  appTC(context, 'liveBusStatus'),
+                  style: TextStyle(
+                    color: scheme.onSecondary.withValues(alpha: .84),
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 34),
-            Text(
-              appTC(context, 'liveBusTitle'),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              appTC(context, 'liveBusStatus'),
-              style: TextStyle(color: Colors.white.withOpacity(0.82)),
-            ),
-            const SizedBox(height: 18),
-            LinearProgressIndicator(
-              value: 0.68,
-              minHeight: 6,
-              borderRadius: BorderRadius.circular(20),
-              backgroundColor: Colors.white.withOpacity(0.22),
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1336,226 +1389,41 @@ class _MomentViewer extends StatefulWidget {
   State<_MomentViewer> createState() => _MomentViewerState();
 }
 
-class _StoryVideoThumbnail extends StatefulWidget {
+class _StoryVideoThumbnail extends StatelessWidget {
   final Map<String, String> moment;
   final ImageProvider? fallback;
 
   const _StoryVideoThumbnail({required this.moment, required this.fallback});
 
   @override
-  State<_StoryVideoThumbnail> createState() => _StoryVideoThumbnailState();
-}
-
-class _StoryVideoThumbnailState extends State<_StoryVideoThumbnail> {
-  VideoPlayerController? _controller;
-  bool _ready = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _init();
-  }
-
-  @override
-  void didUpdateWidget(covariant _StoryVideoThumbnail oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.moment['mediaUrl'] != widget.moment['mediaUrl'] ||
-        oldWidget.moment['cachedPath'] != widget.moment['cachedPath']) {
-      _controller?.dispose();
-      _controller = null;
-      _ready = false;
-      _init();
-    }
-  }
-
-  Future<void> _init() async {
-    final url = widget.moment['cachedPath']?.isNotEmpty == true
-        ? widget.moment['cachedPath']!
-        : widget.moment['mediaUrl'] ?? widget.moment['image'] ?? '';
-    if (url.isEmpty) return;
-    try {
-      final controller = url.startsWith('http')
-          ? VideoPlayerController.networkUrl(Uri.parse(url))
-          : VideoPlayerController.file(File(url));
-      _controller = controller;
-      await controller.initialize();
-      await controller.setLooping(true);
-      await controller.setVolume(0);
-      await controller.play();
-      if (mounted) setState(() => _ready = true);
-    } catch (_) {
-      if (mounted) setState(() => _ready = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = _controller;
-    if (_ready && controller != null) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          FittedBox(
-            fit: BoxFit.cover,
-            child: SizedBox(
-              width: controller.value.size.width,
-              height: controller.value.size.height,
-              child: VideoPlayer(controller),
-            ),
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.black.withOpacity(.18),
-                  Colors.transparent,
-                  Colors.black.withOpacity(.28),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-    return Container(
-      decoration: BoxDecoration(
-        image: widget.fallback == null
-            ? null
-            : DecorationImage(image: widget.fallback!, fit: BoxFit.cover),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0F172A), Color(0xFF2563EB)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-    );
-  }
-}
-
-class _HomeOrganicBackground extends StatelessWidget {
-  const _HomeOrganicBackground();
-
-  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return RepaintBoundary(
-      child: CustomPaint(
-        painter: _HomeOrganicBackgroundPainter(
-          primary: scheme.primary,
-          secondary: scheme.secondary,
-          tertiary: scheme.tertiary,
-          isDark: isDark,
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (fallback != null)
+          Image(image: fallback!, fit: BoxFit.cover)
+        else
+          ColoredBox(color: scheme.surfaceContainerHighest),
+        ColoredBox(color: Colors.black.withValues(alpha: .18)),
+        Center(
+          child: Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: .48),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.play_arrow_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
         ),
-        child: const SizedBox.expand(),
-      ),
+      ],
     );
   }
-}
-
-class _HomeOrganicBackgroundPainter extends CustomPainter {
-  final Color primary;
-  final Color secondary;
-  final Color tertiary;
-  final bool isDark;
-
-  const _HomeOrganicBackgroundPainter({
-    required this.primary,
-    required this.secondary,
-    required this.tertiary,
-    required this.isDark,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final shapes = <_OrganicBackgroundShape>[
-      _OrganicBackgroundShape(.08, .18, 92, primary, .12, 0),
-      _OrganicBackgroundShape(.92, .24, 120, secondary, .11, 3),
-      _OrganicBackgroundShape(.18, .48, 74, tertiary, .10, 6),
-      _OrganicBackgroundShape(.82, .58, 88, primary, .09, 9),
-      _OrganicBackgroundShape(.08, .78, 116, secondary, .08, 12),
-      _OrganicBackgroundShape(.94, .88, 72, tertiary, .10, 15),
-    ];
-    for (final shape in shapes) {
-      final center = Offset(size.width * shape.dx, size.height * shape.dy);
-      final radius = math.min(
-        shape.radius,
-        math.max(size.width, size.height) * .18,
-      );
-      final path = _blobPath(center, radius, shape.seed);
-      final fill = Paint()
-        ..style = PaintingStyle.fill
-        ..color = shape.color.withValues(
-          alpha: isDark ? shape.alpha * .72 : shape.alpha,
-        );
-      final stroke = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = isDark ? 1.2 : 1.6
-        ..color = shape.color.withValues(alpha: isDark ? .16 : .18);
-      canvas.drawPath(path, fill);
-      canvas.drawPath(path, stroke);
-    }
-  }
-
-  Path _blobPath(Offset center, double radius, int seed) {
-    final points = <Offset>[];
-    for (var i = 0; i < 14; i++) {
-      final angle = (math.pi * 2 * i) / 14;
-      final wobble =
-          1 + math.sin(seed + i * 1.7) * .12 + math.cos(seed * .6 + i) * .07;
-      points.add(
-        Offset(
-          center.dx + math.cos(angle) * radius * wobble,
-          center.dy + math.sin(angle) * radius * wobble,
-        ),
-      );
-    }
-    final path = Path()..moveTo(points.first.dx, points.first.dy);
-    for (var i = 0; i < points.length; i++) {
-      final current = points[i];
-      final next = points[(i + 1) % points.length];
-      final control = Offset(
-        (current.dx + next.dx) / 2,
-        (current.dy + next.dy) / 2,
-      );
-      path.quadraticBezierTo(current.dx, current.dy, control.dx, control.dy);
-    }
-    return path..close();
-  }
-
-  @override
-  bool shouldRepaint(covariant _HomeOrganicBackgroundPainter oldDelegate) {
-    return oldDelegate.primary != primary ||
-        oldDelegate.secondary != secondary ||
-        oldDelegate.tertiary != tertiary ||
-        oldDelegate.isDark != isDark;
-  }
-}
-
-class _OrganicBackgroundShape {
-  final double dx;
-  final double dy;
-  final double radius;
-  final Color color;
-  final double alpha;
-  final int seed;
-
-  const _OrganicBackgroundShape(
-    this.dx,
-    this.dy,
-    this.radius,
-    this.color,
-    this.alpha,
-    this.seed,
-  );
 }
 
 class _MomentViewerState extends State<_MomentViewer>
@@ -2029,8 +1897,8 @@ class _MomentViewerState extends State<_MomentViewer>
                                   return LinearProgressIndicator(
                                     minHeight: 3,
                                     value: value,
-                                    backgroundColor: Colors.white.withOpacity(
-                                      0.32,
+                                    backgroundColor: Colors.white.withValues(
+                                      alpha: 0.32,
                                     ),
                                     valueColor:
                                         const AlwaysStoppedAnimation<Color>(
@@ -2111,10 +1979,14 @@ class _DestinationSuggestions extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
           decoration: BoxDecoration(
-            color: scheme.surface.withOpacity(
-              Theme.of(context).brightness == Brightness.dark ? 0.92 : 0.96,
+            color: scheme.surface.withValues(
+              alpha: Theme.of(context).brightness == Brightness.dark
+                  ? 0.92
+                  : 0.96,
             ),
-            border: Border.all(color: scheme.outlineVariant.withOpacity(0.7)),
+            border: Border.all(
+              color: scheme.outlineVariant.withValues(alpha: .7),
+            ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -2219,7 +2091,7 @@ class _CityAutocompleteField extends StatelessWidget {
                 filled: true,
                 fillColor: theme.inputDecorationTheme.fillColor,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide.none,
                 ),
               ),
@@ -2246,7 +2118,7 @@ class _CityAutocompleteField extends StatelessWidget {
                   border: Border.all(color: scheme.outlineVariant),
                   boxShadow: [
                     BoxShadow(
-                      color: scheme.primary.withOpacity(0.16),
+                      color: scheme.primary.withValues(alpha: .16),
                       blurRadius: 28,
                       offset: const Offset(0, 14),
                     ),
@@ -2268,7 +2140,7 @@ class _CityAutocompleteField extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: Color.alphaBlend(
-                            scheme.primary.withOpacity(0.08),
+                            scheme.primary.withValues(alpha: .08),
                             scheme.surface,
                           ),
                           borderRadius: BorderRadius.circular(16),
@@ -2360,10 +2232,10 @@ class _FavoriteRouteShortcuts extends StatelessWidget {
                     padding: const EdgeInsets.all(13),
                     decoration: BoxDecoration(
                       color: Color.alphaBlend(
-                        scheme.primary.withOpacity(.07),
+                        scheme.primary.withValues(alpha: .07),
                         Theme.of(context).cardColor,
                       ),
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: scheme.outlineVariant),
                     ),
                     child: Row(
@@ -2372,14 +2244,12 @@ class _FavoriteRouteShortcuts extends StatelessWidget {
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [scheme.primary, scheme.secondary],
-                            ),
-                            borderRadius: BorderRadius.circular(14),
+                            color: scheme.primary.withValues(alpha: .12),
+                            shape: BoxShape.circle,
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.alt_route_rounded,
-                            color: Colors.white,
+                            color: scheme.primary,
                             size: 20,
                           ),
                         ),
@@ -2441,8 +2311,8 @@ class _InlineNotice extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: scheme.errorContainer,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: scheme.error.withOpacity(0.28)),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: scheme.error.withValues(alpha: .28)),
       ),
       child: Row(
         children: [
@@ -2482,10 +2352,10 @@ class _PassengerStepper extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: Color.alphaBlend(
-          scheme.primary.withOpacity(0.08),
+          scheme.primary.withValues(alpha: .08),
           Theme.of(context).cardColor,
         ),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: scheme.outlineVariant),
       ),
       child: Row(
@@ -2540,7 +2410,7 @@ class _RoundStepButton extends StatelessWidget {
             border: Border.all(color: scheme.outlineVariant),
             boxShadow: [
               BoxShadow(
-                color: scheme.primary.withOpacity(0.08),
+                color: scheme.primary.withValues(alpha: .08),
                 blurRadius: 10,
                 offset: const Offset(0, 5),
               ),
@@ -2564,108 +2434,97 @@ class _HomeIntroOverlay extends StatelessWidget {
     return GestureDetector(
       onTap: onDismiss,
       child: Material(
-        color: Colors.black.withOpacity(.18),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Center(
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: .86, end: 1),
-              duration: const Duration(milliseconds: 760),
-              curve: Curves.easeOutBack,
-              builder: (context, value, child) =>
-                  Transform.scale(scale: value, child: child),
-              child: Container(
-                width: 330,
-                margin: const EdgeInsets.all(24),
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(34),
-                  gradient: LinearGradient(
-                    colors: [scheme.primary, scheme.secondary, scheme.tertiary],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+        color: Colors.black.withValues(alpha: .28),
+        child: Center(
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: .86, end: 1),
+            duration: const Duration(milliseconds: 420),
+            curve: Curves.easeOutBack,
+            builder: (context, value, child) =>
+                Transform.scale(scale: value, child: child),
+            child: Container(
+              width: 330,
+              margin: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: scheme.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: scheme.outlineVariant),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: .22),
+                    blurRadius: 32,
+                    offset: const Offset(0, 18),
                   ),
-                  border: Border.all(color: Colors.white.withOpacity(.28)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: scheme.primary.withOpacity(.34),
-                      blurRadius: 38,
-                      offset: const Offset(0, 22),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 62,
-                          height: 62,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(.18),
-                            borderRadius: BorderRadius.circular(22),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(.3),
-                            ),
-                          ),
-                          child: const Icon(
-                            Icons.auto_awesome_rounded,
-                            color: Colors.white,
-                            size: 32,
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 62,
+                        height: 62,
+                        decoration: BoxDecoration(
+                          color: scheme.primary.withValues(alpha: .12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.auto_awesome_rounded,
+                          color: scheme.primary,
+                          size: 32,
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scheme.secondary.withValues(alpha: .1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          appTC(context, 'liveGps'),
+                          style: TextStyle(
+                            color: scheme.secondary,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(.15),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            appTC(context, 'liveGps'),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 28),
-                    Text(
-                      appTC(context, 'welcomeIntroTitle'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                        height: 1.05,
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                  Text(
+                    appTC(context, 'welcomeIntroTitle'),
+                    style: TextStyle(
+                      color: scheme.onSurface,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      height: 1.05,
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      appTC(context, 'welcomeIntroSub'),
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(.88),
-                        height: 1.38,
-                        fontWeight: FontWeight.w600,
-                      ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    appTC(context, 'welcomeIntroSub'),
+                    style: TextStyle(
+                      color: scheme.onSurfaceVariant,
+                      height: 1.38,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(height: 22),
-                    LinearProgressIndicator(
-                      minHeight: 5,
-                      borderRadius: BorderRadius.circular(20),
-                      backgroundColor: Colors.white.withOpacity(.24),
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        Colors.white,
-                      ),
+                  ),
+                  const SizedBox(height: 22),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Icon(
+                      Icons.arrow_forward_rounded,
+                      color: scheme.primary,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -2695,11 +2554,35 @@ class _ServiceTile extends StatefulWidget {
 class _ServiceTileState extends State<_ServiceTile> {
   bool _pressed = false;
 
+  Color _accent(ColorScheme scheme) {
+    if (widget.icon == Icons.local_shipping_rounded) {
+      return const Color(0xFFDB7C1F);
+    }
+    if (widget.icon == Icons.map_rounded ||
+        widget.icon == Icons.support_agent_rounded) {
+      return scheme.secondary;
+    }
+    if (widget.icon == Icons.notifications_active_rounded) {
+      return scheme.tertiary;
+    }
+    if (widget.icon == Icons.forum_rounded) {
+      return const Color(0xFF0D8FB3);
+    }
+    if (widget.icon == Icons.history_rounded) {
+      return const Color(0xFF5A6F8C);
+    }
+    if (widget.icon == Icons.settings_rounded) {
+      return scheme.onSurfaceVariant;
+    }
+    return scheme.primary;
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final base = isDark ? Theme.of(context).cardColor : Colors.white;
+    final accent = _accent(scheme);
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
       onTapCancel: () => setState(() => _pressed = false),
@@ -2714,24 +2597,14 @@ class _ServiceTileState extends State<_ServiceTile> {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                base,
-                Color.alphaBlend(
-                  scheme.primary.withOpacity(isDark ? .18 : .035),
-                  base,
-                ),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(22),
+            color: base,
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(color: scheme.outlineVariant),
             boxShadow: [
               BoxShadow(
-                color: scheme.primary.withOpacity(isDark ? .16 : .10),
-                blurRadius: 22,
-                offset: const Offset(0, 10),
+                color: Colors.black.withValues(alpha: isDark ? .16 : .055),
+                blurRadius: 16,
+                offset: const Offset(0, 7),
               ),
             ],
           ),
@@ -2740,19 +2613,18 @@ class _ServiceTileState extends State<_ServiceTile> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [scheme.primary, scheme.secondary],
-                  ),
-                  borderRadius: BorderRadius.circular(18),
+                  color: accent.withValues(alpha: isDark ? .22 : .11),
+                  shape: BoxShape.circle,
                 ),
-                child: Icon(widget.icon, color: Colors.white, size: 26),
+                child: Icon(widget.icon, color: accent, size: 24),
               ),
               const SizedBox(height: 16),
               Text(
                 widget.title,
-                maxLines: 3,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: scheme.onSurface,
@@ -2763,7 +2635,7 @@ class _ServiceTileState extends State<_ServiceTile> {
               const SizedBox(height: 5),
               Text(
                 widget.subtitle,
-                maxLines: 3,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
               ),
@@ -2851,22 +2723,14 @@ class _GlassBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: scheme.surface.withOpacity(
-              Theme.of(context).brightness == Brightness.dark ? 0.90 : 0.94,
-            ),
-            borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: scheme.outlineVariant.withOpacity(0.65)),
-          ),
-          child: child,
-        ),
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: scheme.outlineVariant),
       ),
+      child: child,
     );
   }
 }
@@ -2895,58 +2759,46 @@ class _GlassBottomBar extends StatelessWidget {
           alignment: Alignment.bottomCenter,
           clipBehavior: Clip.none,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(30),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                child: Container(
-                  height: 76,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    color: scheme.surface.withOpacity(
-                      Theme.of(context).brightness == Brightness.dark
-                          ? 0.92
-                          : 0.97,
-                    ),
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(
-                      color: scheme.outlineVariant.withOpacity(.85),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: scheme.primary.withOpacity(0.16),
-                        blurRadius: 28,
-                        offset: const Offset(0, 12),
-                      ),
-                    ],
+            Container(
+              height: 76,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: scheme.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: scheme.outlineVariant),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: .1),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
                   ),
-                  child: Row(
-                    children: [
-                      _BottomBarButton(
-                        icon: Icons.home_rounded,
-                        label: appTC(context, 'home'),
-                        onTap: onHome,
-                        selected: true,
-                      ),
-                      _BottomBarButton(
-                        icon: Icons.forum_rounded,
-                        label: appTC(context, 'messages'),
-                        onTap: onTracking,
-                      ),
-                      const SizedBox(width: 80),
-                      _BottomBarButton(
-                        icon: Icons.history_rounded,
-                        label: appTC(context, 'history'),
-                        onTap: onHistory,
-                      ),
-                      _BottomBarButton(
-                        icon: Icons.settings_rounded,
-                        label: appTC(context, 'settings'),
-                        onTap: () => Navigator.pushNamed(context, '/settings'),
-                      ),
-                    ],
+                ],
+              ),
+              child: Row(
+                children: [
+                  _BottomBarButton(
+                    icon: Icons.home_rounded,
+                    label: appTC(context, 'home'),
+                    onTap: onHome,
+                    selected: true,
                   ),
-                ),
+                  _BottomBarButton(
+                    icon: Icons.forum_rounded,
+                    label: appTC(context, 'messages'),
+                    onTap: onTracking,
+                  ),
+                  const SizedBox(width: 80),
+                  _BottomBarButton(
+                    icon: Icons.history_rounded,
+                    label: appTC(context, 'history'),
+                    onTap: onHistory,
+                  ),
+                  _BottomBarButton(
+                    icon: Icons.settings_rounded,
+                    label: appTC(context, 'settings'),
+                    onTap: () => Navigator.pushNamed(context, '/settings'),
+                  ),
+                ],
               ),
             ),
             Positioned(
@@ -2954,25 +2806,21 @@ class _GlassBottomBar extends StatelessWidget {
               child: Tooltip(
                 message: appTC(context, 'booking'),
                 child: InkWell(
-                  onTap: onBooking,
+                  onTap: () {
+                    unawaited(TranvikoInteractionFeedback.primaryAction());
+                    onBooking();
+                  },
                   customBorder: const CircleBorder(),
                   child: Container(
                     width: 72,
                     height: 72,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [
-                          scheme.primary,
-                          Color.lerp(scheme.primary, scheme.secondary, .35)!,
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+                      color: scheme.primary,
                       border: Border.all(color: scheme.surface, width: 6),
                       boxShadow: [
                         BoxShadow(
-                          color: scheme.primary.withOpacity(.34),
+                          color: scheme.primary.withValues(alpha: .34),
                           blurRadius: 24,
                           offset: const Offset(0, 12),
                         ),
@@ -3015,7 +2863,10 @@ class _BottomBarButton extends StatelessWidget {
       child: Tooltip(
         message: label,
         child: InkWell(
-          onTap: onTap,
+          onTap: () {
+            unawaited(TranvikoInteractionFeedback.navigation());
+            onTap();
+          },
           borderRadius: BorderRadius.circular(20),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),

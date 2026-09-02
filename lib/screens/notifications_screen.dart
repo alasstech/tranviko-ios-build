@@ -8,6 +8,7 @@ import '../l10n/app_text.dart';
 import '../services/api_service.dart';
 import '../services/local_cache_service.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/tranviko_loading_skeleton.dart';
 import '../widgets/tranviko_refresh.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -674,7 +675,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ),
                   Expanded(
                     child: _loading
-                        ? const Center(child: CircularProgressIndicator())
+                        ? const TranvikoListSkeleton(itemCount: 7)
                         : displayItems.isEmpty
                         ? Center(
                             child: Text(

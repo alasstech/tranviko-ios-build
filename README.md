@@ -13,12 +13,12 @@ Ce depot contient uniquement l'application Flutter partagee, sa cible iOS et les
 
 ## Premier lancement
 
-1. Lancer `flutter doctor -v` et corriger les erreurs iOS.
-2. Placer le fichier Firebase iOS dans `ios/Runner/GoogleService-Info.plist`.
-3. Lancer `./scripts/verify_ios_setup.sh`.
-4. Ouvrir `ios/Runner.xcworkspace`, selectionner la cible Runner, puis l'equipe Apple Tranviko dans Signing & Capabilities.
-5. Verifier les capacites Push Notifications et Background Modes.
-6. Tester sur un iPhone reel les notifications, CallKit, la camera, le micro, la localisation et LiveKit.
+1. Lire `GUIDE_COMPLET_IOS.md` avant de modifier Xcode.
+2. Lancer `flutter doctor -v` et corriger les erreurs iOS.
+3. Placer le fichier Firebase iOS dans `ios/Runner/GoogleService-Info.plist`.
+4. Lancer `./scripts/verify_ios_setup.sh`.
+5. Ouvrir `ios/Runner.xcworkspace`, selectionner Runner, puis l'equipe Apple Tranviko dans Signing & Capabilities.
+6. Tester sur deux vrais iPhone les notifications, CallKit, la camera, le micro, la localisation et LiveKit.
 
 ## Compilation sans signature
 
@@ -38,11 +38,11 @@ export MAPBOX_ACCESS_TOKEN='pk...'
 ./scripts/build_ipa.sh
 ```
 
-L'IPA est generee dans `build/ios/ipa/`. Les symboles d'obfuscation restent dans `build/symbols/ios/78/` et doivent etre archives par Tranviko.
+L'IPA est generee dans `build/ios/ipa/`. Les symboles d'obfuscation restent dans `build/symbols/ios/<numero-build>/` et doivent etre archives par Tranviko.
 
 Ne jamais envoyer dans Git une cle `.p8`, `.p12`, un profil `.mobileprovision`, un mot de passe, une cle LiveKit serveur ou un compte de service Firebase.
 
-Voir aussi `APPLE_FIREBASE_SETUP.md`.
+Voir surtout `GUIDE_COMPLET_IOS.md`, puis `APPLE_FIREBASE_SETUP.md` pour le resume Apple/Firebase.
 
 ## Acces au depot prive
 

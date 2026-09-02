@@ -7,6 +7,7 @@ import '../models/reservation_store.dart';
 import '../services/api_service.dart';
 import '../services/local_cache_service.dart';
 import '../widgets/profile_photo_picker.dart';
+import '../widgets/tranviko_validation_motion.dart';
 import 'qr_device_login_screen.dart';
 
 ImageProvider? _profileImageProvider(Map<String, dynamic>? profile) {
@@ -573,6 +574,7 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _validationMotion = TranvikoValidationController();
   late final TextEditingController _name;
   late final TextEditingController _email;
   late final TextEditingController _phone;
@@ -598,6 +600,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   void dispose() {
+    _validationMotion.dispose();
     _name.dispose();
     _email.dispose();
     _phone.dispose();
@@ -666,7 +669,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateTranvikoForm(context, _formKey, _validationMotion)) {
+      return;
+    }
     setState(() => _saving = true);
     try {
       final result = await ApiService.updateProfile({
@@ -711,16 +716,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         labelText: label,
         prefixIcon: Icon(icon),
         filled: true,
-        fillColor: dark
-            ? Colors.white.withValues(alpha: .07)
-            : const Color(0xFFF5F6F8),
+        fillColor: dark ? Colors.white.withValues(alpha: .07) : Colors.white,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
@@ -737,126 +740,135 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         title: Text(appTC(context, 'editProfile')),
       ),
       body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(18, 10, 18, 116 + bottomInset),
-            children: [
-              Center(
-                child: GestureDetector(
-                  onTap: _pickingPhoto ? null : _pickPhoto,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: scheme.primary.withValues(alpha: .24),
-                            width: 3,
-                          ),
-                        ),
-                        child: CircleAvatar(
-                          radius: 52,
-                          backgroundColor: scheme.primary.withValues(alpha: .1),
-                          backgroundImage: _currentPhotoImage(),
-                          child: _currentPhotoImage() == null
-                              ? Icon(
-                                  isAgent
-                                      ? Icons.badge_rounded
-                                      : Icons.person_rounded,
-                                  color: scheme.primary,
-                                  size: 42,
-                                )
-                              : null,
-                        ),
-                      ),
-                      Positioned(
-                        right: -2,
-                        bottom: 2,
-                        child: Container(
-                          width: 38,
-                          height: 38,
+        child: TranvikoValidationMotion(
+          controller: _validationMotion,
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(18, 10, 18, 116 + bottomInset),
+              children: [
+                Center(
+                  child: GestureDetector(
+                    onTap: _pickingPhoto ? null : _pickPhoto,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
-                            color: scheme.primary,
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: dark
-                                  ? const Color(0xFF0B1118)
-                                  : Colors.white,
+                              color: scheme.primary.withValues(alpha: .24),
                               width: 3,
                             ),
                           ),
-                          child: _pickingPhoto
-                              ? const Padding(
-                                  padding: EdgeInsets.all(10),
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.camera_alt_rounded,
-                                  color: Colors.white,
-                                  size: 19,
-                                ),
+                          child: CircleAvatar(
+                            radius: 52,
+                            backgroundColor: scheme.primary.withValues(
+                              alpha: .1,
+                            ),
+                            backgroundImage: _currentPhotoImage(),
+                            child: _currentPhotoImage() == null
+                                ? Icon(
+                                    isAgent
+                                        ? Icons.badge_rounded
+                                        : Icons.person_rounded,
+                                    color: scheme.primary,
+                                    size: 42,
+                                  )
+                                : null,
+                          ),
                         ),
-                      ),
-                    ],
+                        Positioned(
+                          right: -2,
+                          bottom: 2,
+                          child: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: scheme.primary,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: dark
+                                    ? const Color(0xFF0B1118)
+                                    : Colors.white,
+                                width: 3,
+                              ),
+                            ),
+                            child: _pickingPhoto
+                                ? const Padding(
+                                    padding: EdgeInsets.all(10),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.camera_alt_rounded,
+                                    color: Colors.white,
+                                    size: 19,
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                appTC(context, 'profileEditHero'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
+                const SizedBox(height: 16),
+                Text(
+                  appTC(context, 'profileEditHero'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                appTC(context, 'profileEditSub'),
-                textAlign: TextAlign.center,
-                style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
-              ),
-              const SizedBox(height: 28),
-              TextFormField(
-                controller: _name,
-                textInputAction: TextInputAction.next,
-                decoration: fieldDecoration(
-                  appTC(context, 'fullName'),
-                  Icons.badge_outlined,
+                const SizedBox(height: 6),
+                Text(
+                  appTC(context, 'profileEditSub'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.35,
+                  ),
                 ),
-                validator: (value) => value == null || value.trim().length < 2
-                    ? appTC(context, 'nameRequired')
-                    : null,
-              ),
-              const SizedBox(height: 13),
-              TextFormField(
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
-                decoration: fieldDecoration(
-                  appTC(context, 'email'),
-                  Icons.mail_outline_rounded,
+                const SizedBox(height: 28),
+                TextFormField(
+                  controller: _name,
+                  textInputAction: TextInputAction.next,
+                  decoration: fieldDecoration(
+                    appTC(context, 'fullName'),
+                    Icons.badge_outlined,
+                  ),
+                  validator: (value) => value == null || value.trim().length < 2
+                      ? appTC(context, 'nameRequired')
+                      : null,
                 ),
-              ),
-              const SizedBox(height: 13),
-              TextFormField(
-                controller: _phone,
-                keyboardType: TextInputType.phone,
-                decoration: fieldDecoration(
-                  appTC(context, 'phone'),
-                  Icons.phone_outlined,
-                ).copyWith(hintText: '+223 76 00 00 00'),
-                validator: (value) => value != null && !_isValidMaliPhone(value)
-                    ? 'Entrez un numero Mali valide: +223XXXXXXXX'
-                    : null,
-              ),
-            ],
+                const SizedBox(height: 13),
+                TextFormField(
+                  controller: _email,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  decoration: fieldDecoration(
+                    appTC(context, 'email'),
+                    Icons.mail_outline_rounded,
+                  ),
+                ),
+                const SizedBox(height: 13),
+                TextFormField(
+                  controller: _phone,
+                  keyboardType: TextInputType.phone,
+                  decoration: fieldDecoration(
+                    appTC(context, 'phone'),
+                    Icons.phone_outlined,
+                  ).copyWith(hintText: '+223 76 00 00 00'),
+                  validator: (value) =>
+                      value != null && !_isValidMaliPhone(value)
+                      ? 'Entrez un numero Mali valide: +223XXXXXXXX'
+                      : null,
+                ),
+              ],
+            ),
           ),
         ),
       ),

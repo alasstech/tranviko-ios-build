@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
 import '../l10n/app_text.dart';
@@ -13,6 +14,9 @@ import '../services/app_lock_service.dart';
 import '../services/api_service.dart';
 import '../services/permission_status_service.dart';
 import '../services/push_notification_service.dart';
+import '../services/interaction_feedback_service.dart';
+import '../widgets/location_permission_disclosure.dart';
+import '../widgets/tranviko_validation_motion.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -26,12 +30,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _promotions = false;
   bool _biometricLock = false;
   bool _ticketReminders = true;
+  bool _interactionSounds = true;
+  bool _interactionHaptics = true;
   // bool _lowData = false;
   String _themeMode = 'system';
   String _language = 'fr';
   double _textScale = 1.0;
   Color _seedColor = const Color(0xFF075EF5);
   Map<String, dynamic>? _selectedCompany;
+
+  Future<void> _openAccountDeletion() async {
+    final opened = await launchUrl(
+      Uri.parse('https://tranviko.app/account-deletion/'),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(t('deleteAccountOpenFailed'))));
+    }
+  }
 
   // Kept for compatibility with older settings labels while appT remains the source of truth.
   // ignore: unused_field
@@ -133,6 +151,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _promotions = prefs.getBool('promotional_notifications') ?? false;
       _biometricLock = prefs.getBool('biometric_lock') ?? false;
       _ticketReminders = prefs.getBool('ticket_reminders') ?? true;
+      _interactionSounds = prefs.getBool('interaction_sounds_enabled') ?? true;
+      _interactionHaptics =
+          prefs.getBool('interaction_haptics_enabled') ?? true;
       // _lowData = prefs.getBool('low_data_mode') ?? false;
       _themeMode = prefs.getString('theme_mode') ?? 'system';
       _language = prefs.getString('language') ?? 'fr';
@@ -324,6 +345,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
               onTap: _openDisplayPage,
+            ),
+          ]),
+          _section(t('interactionFeedback'), [
+            SwitchListTile(
+              value: _interactionSounds,
+              onChanged: (value) async {
+                setState(() => _interactionSounds = value);
+                await TranvikoInteractionFeedback.setSoundEnabled(value);
+              },
+              secondary: const Icon(Icons.graphic_eq_rounded),
+              title: Text(t('interactionSounds')),
+              subtitle: Text(t('interactionSoundsSub')),
+            ),
+            SwitchListTile(
+              value: _interactionHaptics,
+              onChanged: (value) async {
+                setState(() => _interactionHaptics = value);
+                await TranvikoInteractionFeedback.setHapticsEnabled(value);
+                if (_interactionSounds) {
+                  unawaited(TranvikoInteractionFeedback.toggle(value));
+                }
+              },
+              secondary: const Icon(Icons.vibration_rounded),
+              title: Text(t('interactionHaptics')),
+              subtitle: Text(t('interactionHapticsSub')),
             ),
           ]),
           _section(t('security'), [
@@ -518,6 +564,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 context,
                 MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
               ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_remove_alt_1_outlined),
+              title: Text(t('deleteAccount')),
+              subtitle: Text(t('deleteAccountSub')),
+              trailing: const Icon(Icons.open_in_new_rounded),
+              onTap: _openAccountDeletion,
             ),
           ]),
           if (isAgent)
@@ -1191,6 +1244,10 @@ class _PermissionCenterScreenState extends State<PermissionCenterScreen> {
   }
 
   Future<void> _request(DevicePermissionStatus item) async {
+    if (item.key == 'location') {
+      final disclosed = await showLocationPermissionDisclosure(context);
+      if (!disclosed) return;
+    }
     final granted = await PermissionStatusService.request(item.key);
     await _load();
     if (!mounted) return;
@@ -1397,6 +1454,7 @@ class ChangePasswordScreen extends StatefulWidget {
 
 class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _validationMotion = TranvikoValidationController();
   final _current = TextEditingController();
   final _next = TextEditingController();
   final _confirm = TextEditingController();
@@ -1405,6 +1463,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
   @override
   void dispose() {
+    _validationMotion.dispose();
     _current.dispose();
     _next.dispose();
     _confirm.dispose();
@@ -1412,7 +1471,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateTranvikoForm(context, _formKey, _validationMotion)) {
+      return;
+    }
     setState(() => _loading = true);
     try {
       await ApiService.changePassword(
@@ -1452,107 +1513,115 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(18),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      TextFormField(
-                        controller: _current,
-                        obscureText: _obscure,
-                        decoration: InputDecoration(
-                          labelText: appTC(context, 'currentPassword'),
-                          prefixIcon: const Icon(Icons.lock_outline_rounded),
-                        ),
-                        validator: (value) => value == null || value.isEmpty
-                            ? appTC(context, 'currentPasswordRequired')
-                            : null,
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _next,
-                        obscureText: _obscure,
-                        decoration: InputDecoration(
-                          labelText: appTC(context, 'newPassword'),
-                          prefixIcon: const Icon(Icons.enhanced_encryption),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.length < 6) {
-                            return appTC(context, 'minPassword');
-                          }
-                          if (value == _current.text) {
-                            return appTC(context, 'passwordMustChange');
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _confirm,
-                        obscureText: _obscure,
-                        decoration: InputDecoration(
-                          labelText: appTC(context, 'confirm'),
-                          prefixIcon: const Icon(Icons.verified_user_outlined),
-                          suffixIcon: IconButton(
-                            onPressed: () =>
-                                setState(() => _obscure = !_obscure),
-                            icon: Icon(
-                              _obscure
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined,
-                            ),
+                child: TranvikoValidationMotion(
+                  controller: _validationMotion,
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        TextFormField(
+                          controller: _current,
+                          obscureText: _obscure,
+                          decoration: InputDecoration(
+                            labelText: appTC(context, 'currentPassword'),
+                            prefixIcon: const Icon(Icons.lock_outline_rounded),
                           ),
+                          validator: (value) => value == null || value.isEmpty
+                              ? appTC(context, 'currentPasswordRequired')
+                              : null,
                         ),
-                        validator: (value) => value != _next.text
-                            ? appTC(context, 'passwordMismatch')
-                            : null,
-                      ),
-                      const SizedBox(height: 18),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: scheme.primary.withOpacity(.08),
-                          borderRadius: BorderRadius.circular(18),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: _next,
+                          obscureText: _obscure,
+                          decoration: InputDecoration(
+                            labelText: appTC(context, 'newPassword'),
+                            prefixIcon: const Icon(Icons.enhanced_encryption),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.length < 6) {
+                              return appTC(context, 'minPassword');
+                            }
+                            if (value == _current.text) {
+                              return appTC(context, 'passwordMustChange');
+                            }
+                            return null;
+                          },
                         ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.shield_outlined, color: scheme.primary),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                appTC(context, 'passwordSecurityHint'),
-                                style: TextStyle(
-                                  color: scheme.onSurfaceVariant,
-                                  height: 1.35,
-                                ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: _confirm,
+                          obscureText: _obscure,
+                          decoration: InputDecoration(
+                            labelText: appTC(context, 'confirm'),
+                            prefixIcon: const Icon(
+                              Icons.verified_user_outlined,
+                            ),
+                            suffixIcon: IconButton(
+                              onPressed: () =>
+                                  setState(() => _obscure = !_obscure),
+                              icon: Icon(
+                                _obscure
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
                               ),
                             ),
-                          ],
+                          ),
+                          validator: (value) => value != _next.text
+                              ? appTC(context, 'passwordMismatch')
+                              : null,
                         ),
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: _loading ? null : _submit,
-                          icon: _loading
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
+                        const SizedBox(height: 18),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: scheme.primary.withOpacity(.08),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.shield_outlined,
+                                color: scheme.primary,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  appTC(context, 'passwordSecurityHint'),
+                                  style: TextStyle(
+                                    color: scheme.onSurfaceVariant,
+                                    height: 1.35,
                                   ),
-                                )
-                              : const Icon(Icons.save_rounded),
-                          label: Text(
-                            _loading
-                                ? appTC(context, 'pleaseWait')
-                                : appTC(context, 'save'),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _loading ? null : _submit,
+                            icon: _loading
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.save_rounded),
+                            label: Text(
+                              _loading
+                                  ? appTC(context, 'pleaseWait')
+                                  : appTC(context, 'save'),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

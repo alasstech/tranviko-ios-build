@@ -25,7 +25,9 @@ import '../services/local_cache_service.dart';
 import '../services/push_notification_service.dart';
 import '../utils/gps_speed.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/location_permission_disclosure.dart';
 import '../widgets/tranviko_3d_bus_map.dart';
+import '../widgets/tranviko_validation_motion.dart';
 import 'messages_screen.dart';
 import 'manager_webview_screen.dart';
 
@@ -38,6 +40,7 @@ class AdminScreen extends StatefulWidget {
 
 class _AdminScreenState extends State<AdminScreen> {
   final GlobalKey<FormState> _loginFormKey = GlobalKey<FormState>();
+  final _loginValidationMotion = TranvikoValidationController();
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
@@ -182,15 +185,18 @@ class _AdminScreenState extends State<AdminScreen> {
 
   @override
   void dispose() {
+    _loginValidationMotion.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _login() async {
-    FocusScope.of(context).unfocus();
-    if (!(_loginFormKey.currentState?.validate() ?? false)) {
-      unawaited(TranvikoInteractionFeedback.warning());
+    if (!validateTranvikoForm(
+      context,
+      _loginFormKey,
+      _loginValidationMotion,
+    )) {
       return;
     }
     setState(() => _isLoading = true);
@@ -420,303 +426,329 @@ class _AdminScreenState extends State<AdminScreen> {
                             );
                           },
                           child: AutofillGroup(
-                            child: Form(
-                              key: _loginFormKey,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Row(
-                                    children: [
-                                      if (Navigator.of(context).canPop()) ...[
-                                        IconButton(
-                                          tooltip: 'Retour',
-                                          onPressed: Navigator.of(context).pop,
-                                          icon: const Icon(
-                                            Icons.arrow_back_rounded,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                      ],
-                                      _AgentCompanyLogo(
-                                        logoUrl: _companyLogoUrl,
-                                        color: scheme.primary,
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              _companyName,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: theme.textTheme.titleMedium
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.w900,
-                                                  ),
-                                            ),
-                                            Text(
-                                              'ESPACE OPERATIONNEL',
-                                              style: theme.textTheme.labelSmall
-                                                  ?.copyWith(
-                                                    color: scheme.primary,
-                                                    fontWeight: FontWeight.w900,
-                                                  ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Container(
-                                        width: 10,
-                                        height: 10,
-                                        decoration: BoxDecoration(
-                                          color: scheme.tertiary,
-                                          shape: BoxShape.circle,
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: scheme.tertiary.withValues(
-                                                alpha: .38,
-                                              ),
-                                              blurRadius: 10,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 46),
-                                  Text(
-                                    'Pret pour le depart ?',
-                                    style: theme.textTheme.headlineMedium
-                                        ?.copyWith(
-                                          color: scheme.onSurface,
-                                          fontWeight: FontWeight.w900,
-                                          height: 1.02,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    'Connectez-vous pour acceder aux tickets, aux trajets et aux operations de votre compagnie.',
-                                    style: theme.textTheme.bodyLarge?.copyWith(
-                                      color: scheme.onSurfaceVariant,
-                                      height: 1.45,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 28),
-                                  Container(
-                                    padding: const EdgeInsets.all(18),
-                                    decoration: BoxDecoration(
-                                      color: theme.cardColor,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: scheme.outlineVariant,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: scheme.primary.withValues(
-                                            alpha:
-                                                theme.brightness ==
-                                                    Brightness.dark
-                                                ? .16
-                                                : .08,
-                                          ),
-                                          blurRadius: 28,
-                                          offset: const Offset(0, 14),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
+                            child: TranvikoValidationMotion(
+                              controller: _loginValidationMotion,
+                              child: Form(
+                                key: _loginFormKey,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Row(
                                       children: [
-                                        Row(
-                                          children: [
-                                            Container(
-                                              width: 4,
-                                              height: 34,
-                                              decoration: BoxDecoration(
-                                                color: scheme.primary,
-                                                borderRadius:
-                                                    BorderRadius.circular(2),
-                                              ),
+                                        if (Navigator.of(context).canPop()) ...[
+                                          IconButton(
+                                            tooltip: 'Retour',
+                                            onPressed: Navigator.of(
+                                              context,
+                                            ).pop,
+                                            icon: const Icon(
+                                              Icons.arrow_back_rounded,
                                             ),
-                                            const SizedBox(width: 10),
-                                            Expanded(
-                                              child: Text(
-                                                appTC(context, 'agentLogin'),
+                                          ),
+                                          const SizedBox(width: 6),
+                                        ],
+                                        _AgentCompanyLogo(
+                                          logoUrl: _companyLogoUrl,
+                                          color: scheme.primary,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                _companyName,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                                 style: theme
                                                     .textTheme
-                                                    .titleLarge
+                                                    .titleMedium
                                                     ?.copyWith(
                                                       fontWeight:
                                                           FontWeight.w900,
                                                     ),
                                               ),
-                                            ),
-                                            Icon(
-                                              Icons.verified_user_outlined,
-                                              color: scheme.primary,
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 20),
-                                        TextFormField(
-                                          controller: _usernameController,
-                                          autofillHints: const [
-                                            AutofillHints.username,
-                                          ],
-                                          textInputAction: TextInputAction.next,
-                                          autocorrect: false,
-                                          enableSuggestions: false,
-                                          decoration: InputDecoration(
-                                            labelText: appTC(
-                                              context,
-                                              'username',
-                                            ),
-                                            hintText: 'ex. agent.guichet',
-                                            prefixIcon: const Icon(
-                                              Icons.badge_outlined,
-                                            ),
-                                          ),
-                                          validator: (value) =>
-                                              value == null ||
-                                                  value.trim().isEmpty
-                                              ? appTC(
-                                                  context,
-                                                  'usernameRequired',
-                                                )
-                                              : null,
-                                        ),
-                                        const SizedBox(height: 14),
-                                        TextFormField(
-                                          controller: _passwordController,
-                                          autofillHints: const [
-                                            AutofillHints.password,
-                                          ],
-                                          textInputAction: TextInputAction.done,
-                                          obscureText: !_passwordVisible,
-                                          onFieldSubmitted: (_) {
-                                            if (!_isLoading) {
-                                              unawaited(_login());
-                                            }
-                                          },
-                                          decoration: InputDecoration(
-                                            labelText: appTC(
-                                              context,
-                                              'password',
-                                            ),
-                                            prefixIcon: const Icon(
-                                              Icons.lock_outline_rounded,
-                                            ),
-                                            suffixIcon: IconButton(
-                                              tooltip: _passwordVisible
-                                                  ? 'Masquer le mot de passe'
-                                                  : 'Afficher le mot de passe',
-                                              onPressed: () {
-                                                unawaited(
-                                                  TranvikoInteractionFeedback.selection(),
-                                                );
-                                                setState(
-                                                  () => _passwordVisible =
-                                                      !_passwordVisible,
-                                                );
-                                              },
-                                              icon: Icon(
-                                                _passwordVisible
-                                                    ? Icons
-                                                          .visibility_off_outlined
-                                                    : Icons.visibility_outlined,
+                                              Text(
+                                                'ESPACE OPERATIONNEL',
+                                                style: theme
+                                                    .textTheme
+                                                    .labelSmall
+                                                    ?.copyWith(
+                                                      color: scheme.primary,
+                                                      fontWeight:
+                                                          FontWeight.w900,
+                                                    ),
                                               ),
-                                            ),
+                                            ],
                                           ),
-                                          validator: (value) =>
-                                              value == null || value.isEmpty
-                                              ? appTC(context, 'password')
-                                              : null,
                                         ),
-                                        const SizedBox(height: 20),
-                                        FilledButton(
-                                          onPressed: _isLoading ? null : _login,
-                                          child: AnimatedSwitcher(
-                                            duration: const Duration(
-                                              milliseconds: 180,
-                                            ),
-                                            child: _isLoading
-                                                ? Row(
-                                                    key: const ValueKey(
-                                                      'loading',
-                                                    ),
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .center,
-                                                    children: [
-                                                      SizedBox(
-                                                        width: 18,
-                                                        height: 18,
-                                                        child:
-                                                            CircularProgressIndicator(
-                                                              strokeWidth: 2,
-                                                              color: scheme
-                                                                  .onPrimary,
-                                                            ),
-                                                      ),
-                                                      const SizedBox(width: 10),
-                                                      Text(
-                                                        appTC(
-                                                          context,
-                                                          'pleaseWait',
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  )
-                                                : Row(
-                                                    key: const ValueKey(
-                                                      'ready',
-                                                    ),
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .center,
-                                                    children: [
-                                                      const Icon(
-                                                        Icons.login_rounded,
-                                                      ),
-                                                      const SizedBox(width: 9),
-                                                      Text(
-                                                        appTC(context, 'login'),
-                                                      ),
-                                                    ],
-                                                  ),
+                                        Container(
+                                          width: 10,
+                                          height: 10,
+                                          decoration: BoxDecoration(
+                                            color: scheme.tertiary,
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: scheme.tertiary
+                                                    .withValues(alpha: .38),
+                                                blurRadius: 10,
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                  const SizedBox(height: 18),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.shield_outlined,
-                                        size: 17,
-                                        color: scheme.tertiary,
-                                      ),
-                                      const SizedBox(width: 7),
-                                      Flexible(
-                                        child: Text(
-                                          'Acces chiffre et limite a votre compagnie',
-                                          textAlign: TextAlign.center,
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
-                                                color: scheme.onSurfaceVariant,
-                                                fontWeight: FontWeight.w700,
-                                              ),
+                                    const SizedBox(height: 46),
+                                    Text(
+                                      'Pret pour le depart ?',
+                                      style: theme.textTheme.headlineMedium
+                                          ?.copyWith(
+                                            color: scheme.onSurface,
+                                            fontWeight: FontWeight.w900,
+                                            height: 1.02,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      'Connectez-vous pour acceder aux tickets, aux trajets et aux operations de votre compagnie.',
+                                      style: theme.textTheme.bodyLarge
+                                          ?.copyWith(
+                                            color: scheme.onSurfaceVariant,
+                                            height: 1.45,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 28),
+                                    Container(
+                                      padding: const EdgeInsets.all(18),
+                                      decoration: BoxDecoration(
+                                        color: theme.cardColor,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: scheme.outlineVariant,
                                         ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: scheme.primary.withValues(
+                                              alpha:
+                                                  theme.brightness ==
+                                                      Brightness.dark
+                                                  ? .16
+                                                  : .08,
+                                            ),
+                                            blurRadius: 28,
+                                            offset: const Offset(0, 14),
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
-                                ],
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Container(
+                                                width: 4,
+                                                height: 34,
+                                                decoration: BoxDecoration(
+                                                  color: scheme.primary,
+                                                  borderRadius:
+                                                      BorderRadius.circular(2),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: Text(
+                                                  appTC(context, 'agentLogin'),
+                                                  style: theme
+                                                      .textTheme
+                                                      .titleLarge
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w900,
+                                                      ),
+                                                ),
+                                              ),
+                                              Icon(
+                                                Icons.verified_user_outlined,
+                                                color: scheme.primary,
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 20),
+                                          TextFormField(
+                                            controller: _usernameController,
+                                            autofillHints: const [
+                                              AutofillHints.username,
+                                            ],
+                                            textInputAction:
+                                                TextInputAction.next,
+                                            autocorrect: false,
+                                            enableSuggestions: false,
+                                            decoration: InputDecoration(
+                                              labelText: appTC(
+                                                context,
+                                                'username',
+                                              ),
+                                              hintText: 'ex. agent.guichet',
+                                              prefixIcon: const Icon(
+                                                Icons.badge_outlined,
+                                              ),
+                                            ),
+                                            validator: (value) =>
+                                                value == null ||
+                                                    value.trim().isEmpty
+                                                ? appTC(
+                                                    context,
+                                                    'usernameRequired',
+                                                  )
+                                                : null,
+                                          ),
+                                          const SizedBox(height: 14),
+                                          TextFormField(
+                                            controller: _passwordController,
+                                            autofillHints: const [
+                                              AutofillHints.password,
+                                            ],
+                                            textInputAction:
+                                                TextInputAction.done,
+                                            obscureText: !_passwordVisible,
+                                            onFieldSubmitted: (_) {
+                                              if (!_isLoading) {
+                                                unawaited(_login());
+                                              }
+                                            },
+                                            decoration: InputDecoration(
+                                              labelText: appTC(
+                                                context,
+                                                'password',
+                                              ),
+                                              prefixIcon: const Icon(
+                                                Icons.lock_outline_rounded,
+                                              ),
+                                              suffixIcon: IconButton(
+                                                tooltip: _passwordVisible
+                                                    ? 'Masquer le mot de passe'
+                                                    : 'Afficher le mot de passe',
+                                                onPressed: () {
+                                                  unawaited(
+                                                    TranvikoInteractionFeedback.selection(),
+                                                  );
+                                                  setState(
+                                                    () => _passwordVisible =
+                                                        !_passwordVisible,
+                                                  );
+                                                },
+                                                icon: Icon(
+                                                  _passwordVisible
+                                                      ? Icons
+                                                            .visibility_off_outlined
+                                                      : Icons
+                                                            .visibility_outlined,
+                                                ),
+                                              ),
+                                            ),
+                                            validator: (value) =>
+                                                value == null || value.isEmpty
+                                                ? appTC(context, 'password')
+                                                : null,
+                                          ),
+                                          const SizedBox(height: 20),
+                                          FilledButton(
+                                            onPressed: _isLoading
+                                                ? null
+                                                : _login,
+                                            child: AnimatedSwitcher(
+                                              duration: const Duration(
+                                                milliseconds: 180,
+                                              ),
+                                              child: _isLoading
+                                                  ? Row(
+                                                      key: const ValueKey(
+                                                        'loading',
+                                                      ),
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .center,
+                                                      children: [
+                                                        SizedBox(
+                                                          width: 18,
+                                                          height: 18,
+                                                          child:
+                                                              CircularProgressIndicator(
+                                                                strokeWidth: 2,
+                                                                color: scheme
+                                                                    .onPrimary,
+                                                              ),
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 10,
+                                                        ),
+                                                        Text(
+                                                          appTC(
+                                                            context,
+                                                            'pleaseWait',
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    )
+                                                  : Row(
+                                                      key: const ValueKey(
+                                                        'ready',
+                                                      ),
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .center,
+                                                      children: [
+                                                        const Icon(
+                                                          Icons.login_rounded,
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 9,
+                                                        ),
+                                                        Text(
+                                                          appTC(
+                                                            context,
+                                                            'login',
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 18),
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.shield_outlined,
+                                          size: 17,
+                                          color: scheme.tertiary,
+                                        ),
+                                        const SizedBox(width: 7),
+                                        Flexible(
+                                          child: Text(
+                                            'Acces chiffre et limite a votre compagnie',
+                                            textAlign: TextAlign.center,
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                                  color:
+                                                      scheme.onSurfaceVariant,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -948,6 +980,7 @@ class AgentPackageCreatePage extends StatefulWidget {
 
 class _AgentPackageCreatePageState extends State<AgentPackageCreatePage> {
   final _formKey = GlobalKey<FormState>();
+  final _validationMotion = TranvikoValidationController();
   final _senderName = TextEditingController();
   final _senderPhone = TextEditingController();
   final _senderEmail = TextEditingController();
@@ -965,6 +998,7 @@ class _AgentPackageCreatePageState extends State<AgentPackageCreatePage> {
 
   @override
   void dispose() {
+    _validationMotion.dispose();
     for (final controller in [
       _senderName,
       _senderPhone,
@@ -1036,7 +1070,9 @@ class _AgentPackageCreatePageState extends State<AgentPackageCreatePage> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateTranvikoForm(context, _formKey, _validationMotion)) {
+      return;
+    }
     setState(() => _loading = true);
     try {
       final result = await ApiService.createAgentPackage(
@@ -1078,159 +1114,170 @@ class _AgentPackageCreatePageState extends State<AgentPackageCreatePage> {
     final trips = _tripChoices;
     return Scaffold(
       appBar: AppBar(title: Text(appTC(context, 'addPackage'))),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(18),
-          children: [
-            const Text(
-              'Expediteur',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _senderName,
-              decoration: const InputDecoration(labelText: 'Nom expediteur'),
-            ),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _senderPhone,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Telephone expediteur',
+      body: TranvikoValidationMotion(
+        controller: _validationMotion,
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(18),
+            children: [
+              const Text(
+                'Expediteur',
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-            ),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _senderEmail,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(labelText: 'Email expediteur'),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Destinataire',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _receiverName,
-              decoration: const InputDecoration(labelText: 'Nom destinataire'),
-              validator: (value) => value == null || value.trim().isEmpty
-                  ? 'Champ obligatoire'
-                  : null,
-            ),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _receiverEmail,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: 'Email de confirmation',
-              ),
-              validator: (value) => value == null || !value.contains('@')
-                  ? 'Email valide obligatoire'
-                  : null,
-            ),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _receiverPhone,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Telephone'),
-            ),
-            const SizedBox(height: 20),
-            DropdownButtonFormField<int>(
-              initialValue: _tripId,
-              decoration: const InputDecoration(labelText: 'Trajet du colis'),
-              items: trips
-                  .map(
-                    (trip) => DropdownMenuItem<int>(
-                      value: (trip['id'] as num).toInt(),
-                      child: Text(
-                        '${trip['route']} - ${trip['travelDate']} ${trip['departureTime']}',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  )
-                  .toList(),
-              onChanged: _selectTrip,
-              validator: (value) => value == null ? 'Trajet obligatoire' : null,
-            ),
-            if (_departure.text.isNotEmpty || _destination.text.isNotEmpty) ...[
               const SizedBox(height: 10),
-              InputDecorator(
-                decoration: const InputDecoration(labelText: 'Route detectee'),
-                child: Text('${_departure.text} -> ${_destination.text}'),
+              TextFormField(
+                controller: _senderName,
+                decoration: const InputDecoration(labelText: 'Nom expediteur'),
               ),
-            ],
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _weight,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(labelText: 'Poids en kg'),
-            ),
-            const SizedBox(height: 10),
-            if (trips.isEmpty)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text('Aucun trajet disponible depuis le backend.'),
-              ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: _loading ? null : _pickDeparturePhoto,
-              icon: Icon(
-                _departurePhoto == null
-                    ? Icons.camera_alt_outlined
-                    : Icons.check_circle_outline,
-              ),
-              label: Text(
-                _departurePhoto == null
-                    ? 'Photo du colis au depart'
-                    : 'Photo du depart ajoutee',
-              ),
-            ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: _loading ? null : _submit,
-              icon: const Icon(Icons.mark_email_read_outlined),
-              label: Text(
-                _loading ? 'Creation...' : 'Creer et envoyer le code',
-              ),
-            ),
-            if (package != null) ...[
-              const SizedBox(height: 20),
-              Card(
-                color: Colors.green.shade50,
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.check_circle,
-                        color: Colors.green,
-                        size: 42,
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Colis enregistre',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      SelectableText(
-                        package['trackingCode'] as String,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(_result?['message'] as String? ?? ''),
-                    ],
-                  ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _senderPhone,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Telephone expediteur',
                 ),
               ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _senderEmail,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email expediteur',
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Destinataire',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _receiverName,
+                decoration: const InputDecoration(
+                  labelText: 'Nom destinataire',
+                ),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Champ obligatoire'
+                    : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _receiverEmail,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email de confirmation',
+                ),
+                validator: (value) => value == null || !value.contains('@')
+                    ? 'Email valide obligatoire'
+                    : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _receiverPhone,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Telephone'),
+              ),
+              const SizedBox(height: 20),
+              DropdownButtonFormField<int>(
+                initialValue: _tripId,
+                decoration: const InputDecoration(labelText: 'Trajet du colis'),
+                items: trips
+                    .map(
+                      (trip) => DropdownMenuItem<int>(
+                        value: (trip['id'] as num).toInt(),
+                        child: Text(
+                          '${trip['route']} - ${trip['travelDate']} ${trip['departureTime']}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: _selectTrip,
+                validator: (value) =>
+                    value == null ? 'Trajet obligatoire' : null,
+              ),
+              if (_departure.text.isNotEmpty ||
+                  _destination.text.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Route detectee',
+                  ),
+                  child: Text('${_departure.text} -> ${_destination.text}'),
+                ),
+              ],
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _weight,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(labelText: 'Poids en kg'),
+              ),
+              const SizedBox(height: 10),
+              if (trips.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text('Aucun trajet disponible depuis le backend.'),
+                ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _loading ? null : _pickDeparturePhoto,
+                icon: Icon(
+                  _departurePhoto == null
+                      ? Icons.camera_alt_outlined
+                      : Icons.check_circle_outline,
+                ),
+                label: Text(
+                  _departurePhoto == null
+                      ? 'Photo du colis au depart'
+                      : 'Photo du depart ajoutee',
+                ),
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: _loading ? null : _submit,
+                icon: const Icon(Icons.mark_email_read_outlined),
+                label: Text(
+                  _loading ? 'Creation...' : 'Creer et envoyer le code',
+                ),
+              ),
+              if (package != null) ...[
+                const SizedBox(height: 20),
+                Card(
+                  color: Colors.green.shade50,
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      children: [
+                        const Icon(
+                          Icons.check_circle,
+                          color: Colors.green,
+                          size: 42,
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Colis enregistre',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        SelectableText(
+                          package['trackingCode'] as String,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(_result?['message'] as String? ?? ''),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -2025,6 +2072,9 @@ class _DriverTrackingPageState extends State<DriverTrackingPage> {
     }
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
+      if (!mounted) return false;
+      final disclosed = await showLocationPermissionDisclosure(context);
+      if (!disclosed) return false;
       permission = await Geolocator.requestPermission();
     }
     if (permission == LocationPermission.denied ||
@@ -2922,6 +2972,12 @@ class _AgentBiometricPageState extends State<AgentBiometricPage> {
       if (!serviceEnabled) return 'Position indisponible - GPS desactive';
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
+        if (mounted) {
+          final disclosed = await showLocationPermissionDisclosure(context);
+          if (!disclosed) {
+            return 'Position indisponible - permission refusee';
+          }
+        }
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.denied ||
@@ -3944,6 +4000,7 @@ class AgentExpensePage extends StatefulWidget {
 
 class _AgentExpensePageState extends State<AgentExpensePage> {
   final _formKey = GlobalKey<FormState>();
+  final _validationMotion = TranvikoValidationController();
   final _title = TextEditingController();
   final _description = TextEditingController();
   final _amount = TextEditingController();
@@ -3952,6 +4009,7 @@ class _AgentExpensePageState extends State<AgentExpensePage> {
 
   @override
   void dispose() {
+    _validationMotion.dispose();
     _title.dispose();
     _description.dispose();
     _amount.dispose();
@@ -3959,7 +4017,9 @@ class _AgentExpensePageState extends State<AgentExpensePage> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateTranvikoForm(context, _formKey, _validationMotion)) {
+      return;
+    }
     setState(() => _saving = true);
     try {
       await ApiService.createAgentExpense(
@@ -3993,69 +4053,72 @@ class _AgentExpensePageState extends State<AgentExpensePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Nouvelle depense')),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(18),
-          children: [
-            DropdownButtonFormField<String>(
-              value: _category,
-              decoration: const InputDecoration(labelText: 'Categorie'),
-              items: const [
-                DropdownMenuItem(value: 'fuel', child: Text('Carburant')),
-                DropdownMenuItem(
-                  value: 'maintenance',
-                  child: Text('Entretien'),
-                ),
-                DropdownMenuItem(value: 'tolls', child: Text('Peages')),
-                DropdownMenuItem(value: 'salary', child: Text('Salaires')),
-                DropdownMenuItem(value: 'other', child: Text('Autre')),
-              ],
-              onChanged: (value) =>
-                  setState(() => _category = value ?? 'other'),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _title,
-              decoration: const InputDecoration(labelText: 'Titre'),
-              validator: (value) => (value == null || value.trim().isEmpty)
-                  ? 'Titre obligatoire'
-                  : null,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _amount,
-              decoration: const InputDecoration(labelText: 'Montant FCFA'),
-              keyboardType: TextInputType.number,
-              validator: (value) {
-                final amount = double.tryParse(
-                  (value ?? '').replaceAll(',', '.'),
-                );
-                return amount == null || amount <= 0
-                    ? 'Montant invalide'
-                    : null;
-              },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _description,
-              decoration: const InputDecoration(labelText: 'Description'),
-              minLines: 3,
-              maxLines: 5,
-            ),
-            const SizedBox(height: 18),
-            FilledButton.icon(
-              onPressed: _saving ? null : _submit,
-              icon: _saving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send),
-              label: const Text('Envoyer la depense'),
-            ),
-          ],
+      body: TranvikoValidationMotion(
+        controller: _validationMotion,
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(18),
+            children: [
+              DropdownButtonFormField<String>(
+                value: _category,
+                decoration: const InputDecoration(labelText: 'Categorie'),
+                items: const [
+                  DropdownMenuItem(value: 'fuel', child: Text('Carburant')),
+                  DropdownMenuItem(
+                    value: 'maintenance',
+                    child: Text('Entretien'),
+                  ),
+                  DropdownMenuItem(value: 'tolls', child: Text('Peages')),
+                  DropdownMenuItem(value: 'salary', child: Text('Salaires')),
+                  DropdownMenuItem(value: 'other', child: Text('Autre')),
+                ],
+                onChanged: (value) =>
+                    setState(() => _category = value ?? 'other'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _title,
+                decoration: const InputDecoration(labelText: 'Titre'),
+                validator: (value) => (value == null || value.trim().isEmpty)
+                    ? 'Titre obligatoire'
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _amount,
+                decoration: const InputDecoration(labelText: 'Montant FCFA'),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  final amount = double.tryParse(
+                    (value ?? '').replaceAll(',', '.'),
+                  );
+                  return amount == null || amount <= 0
+                      ? 'Montant invalide'
+                      : null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _description,
+                decoration: const InputDecoration(labelText: 'Description'),
+                minLines: 3,
+                maxLines: 5,
+              ),
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                onPressed: _saving ? null : _submit,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send),
+                label: const Text('Envoyer la depense'),
+              ),
+            ],
+          ),
         ),
       ),
     );

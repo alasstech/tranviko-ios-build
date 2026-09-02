@@ -1025,7 +1025,7 @@ class _HistoryDigitalTicket extends StatelessWidget {
                     style: TextStyle(
                       color: scheme.onSurfaceVariant,
                       fontSize: 10,
-                      letterSpacing: .8,
+                      letterSpacing: 0,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -1184,7 +1184,7 @@ class _HistoryMini extends StatelessWidget {
             color: scheme.onSurfaceVariant,
             fontSize: 10,
             fontWeight: FontWeight.w800,
-            letterSpacing: .8,
+            letterSpacing: 0,
           ),
         ),
         const SizedBox(height: 4),

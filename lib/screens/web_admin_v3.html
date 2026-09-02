@@ -2718,5 +2718,203 @@
             }
         });
     </script>
+<style>
+  body:not(.dark) { background: #fff !important; }
+  body:not(.dark) #sidebar {
+    background: #fff !important;
+    border-right-color: #dce6f2 !important;
+    box-shadow: none !important;
+  }
+  body:not(.dark) main > header {
+    background: rgba(255,255,255,.96) !important;
+    border-color: #dce6f2 !important;
+    box-shadow: none !important;
+  }
+  body:not(.dark) .kpi-card,
+  body:not(.dark) main .rounded-2xl {
+    background: #fff !important;
+    border-color: #dce6f2 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 8px 24px rgba(15,23,42,.05) !important;
+  }
+  @keyframes tranviko-field-shake {
+    0%, 100% { transform: translateX(0); }
+    18% { transform: translateX(-9px); }
+    36% { transform: translateX(7px); }
+    54% { transform: translateX(-5px); }
+    72% { transform: translateX(3px); }
+  }
+  form input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  form select,
+  form textarea {
+    border-radius: 0.9rem;
+    transition: border-color 160ms ease, box-shadow 160ms ease,
+      background-color 160ms ease, transform 160ms ease;
+  }
+  form input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus,
+  form select:focus,
+  form textarea:focus {
+    box-shadow: 0 0 0 3px rgb(var(--primary-rgb, 37 99 235) / 0.11);
+  }
+  .tranviko-field-invalid {
+    animation: tranviko-field-shake 420ms cubic-bezier(.22, .8, .28, 1);
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 0 3px rgb(239 68 68 / 0.12) !important;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tranviko-field-invalid { animation: none; }
+  }
+</style>
+<script>
+  (function installTranvikoInteractionLanguage(){
+    if (window.__tranvikoInteractionLanguageInstalled) return;
+    window.__tranvikoInteractionLanguageInstalled = true;
+    let audioContext = null;
+    let lastToneAt = 0;
+    let pointerStart = null;
+    const soundsEnabled = () => localStorage.getItem('tranviko_ui_sounds') !== 'off';
+
+    function playTone(kind = 'selection') {
+      if (!soundsEnabled() || document.hidden) return;
+      const now = performance.now();
+      if (now - lastToneAt < 75) return;
+      lastToneAt = now;
+      try {
+        audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === 'suspended') audioContext.resume();
+        const presets = {
+          selection: [[720, .025, .018]],
+          success: [[520, .04, .035], [740, .055, .04], [920, .07, .035]],
+          error: [[320, .055, .04], [245, .085, .035]],
+          primary: [[540, .035, .03], [820, .05, .035]]
+        };
+        const notes = presets[kind] || presets.selection;
+        let cursor = audioContext.currentTime;
+        notes.forEach(([frequency, duration, volume]) => {
+          const oscillator = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          oscillator.type = 'sine';
+          oscillator.frequency.setValueAtTime(frequency, cursor);
+          gain.gain.setValueAtTime(.0001, cursor);
+          gain.gain.exponentialRampToValueAtTime(volume, cursor + .006);
+          gain.gain.exponentialRampToValueAtTime(.0001, cursor + duration);
+          oscillator.connect(gain).connect(audioContext.destination);
+          oscillator.start(cursor);
+          oscillator.stop(cursor + duration + .01);
+          cursor += duration + .012;
+        });
+      } catch (_) {}
+    }
+
+    window.TranvikoWebFeedback = {
+      selection: () => playTone('selection'),
+      primary: () => playTone('primary'),
+      success: () => playTone('success'),
+      error: () => playTone('error'),
+      setEnabled: value => localStorage.setItem('tranviko_ui_sounds', value ? 'on' : 'off')
+    };
+
+    document.addEventListener('pointerdown', event => {
+      pointerStart = {x: event.clientX, y: event.clientY, at: performance.now()};
+    }, {passive: true});
+    document.addEventListener('pointerup', event => {
+      const start = pointerStart;
+      pointerStart = null;
+      if (!start || performance.now() - start.at > 420) return;
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) return;
+      const action = event.target.closest('button, a, [role="button"], input[type="checkbox"], input[type="radio"]');
+      if (!action || action.disabled || action.getAttribute('aria-disabled') === 'true') return;
+      playTone(action.matches('button[type="submit"], .primary-action') ? 'primary' : 'selection');
+    }, {passive: true});
+
+    let invalidToneTimer = null;
+    document.addEventListener('invalid', event => {
+      const field = event.target;
+      if (!(field instanceof HTMLElement)) return;
+      field.classList.remove('tranviko-field-invalid');
+      void field.offsetWidth;
+      field.classList.add('tranviko-field-invalid');
+      clearTimeout(invalidToneTimer);
+      invalidToneTimer = setTimeout(() => playTone('error'), 20);
+      field.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center'});
+    }, true);
+    document.addEventListener('input', event => {
+      if (event.target instanceof HTMLElement) {
+        event.target.classList.remove('tranviko-field-invalid');
+      }
+    }, true);
+
+    const originalShowToast = window.showToast;
+    if (typeof originalShowToast === 'function') {
+      window.showToast = function(message) {
+        const value = String(message || '').toLowerCase();
+        playTone(/impossible|erreur|refus|echec/.test(value) ? 'error' : 'success');
+        return originalShowToast.apply(this, arguments);
+      };
+    }
+  })();
+</script>
+<script>
+  (function(){
+    const endpoint='/api/client-diagnostics/';
+    const isTauri=Boolean(window.__TAURI__||window.__TAURI_INTERNALS__||window.__TAURI_METADATA__);
+    const platform=isTauri?'tauri':'webadmin';
+    const seen=new Map();
+    function clip(value,limit){return String(value||'').slice(0,limit)}
+    function sendDiagnostic(eventType,severity,message,stack,extra){
+      try{
+        const key=[eventType,message,location.pathname].join('|').slice(0,300);
+        const now=Date.now();
+        if(seen.has(key)&&now-seen.get(key)<15000)return;
+        seen.set(key,now);
+        const payload=JSON.stringify({
+          eventType,
+          severity,
+          platform,
+          appVersion:window.TRANVIKO_APP_VERSION||'webadmin',
+          releaseChannel:'production',
+          screen:location.pathname,
+          message:clip(message,700),
+          stack:clip(stack,6000),
+          deviceName:navigator.platform||'web',
+          osVersion:navigator.userAgent||'',
+          extra:Object.assign({href:location.href},extra||{})
+        });
+        if(navigator.sendBeacon){
+          const ok=navigator.sendBeacon(endpoint,new Blob([payload],{type:'application/json'}));
+          if(ok)return;
+        }
+        fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:payload,keepalive:true,credentials:'same-origin'}).catch(()=>{});
+      }catch(_){}
+    }
+    window.addEventListener('error',event=>{
+      sendDiagnostic('js_error','error',event.message,event.error&&event.error.stack,{filename:event.filename,lineno:event.lineno,colno:event.colno});
+    });
+    window.addEventListener('unhandledrejection',event=>{
+      const reason=event.reason||{};
+      sendDiagnostic('unhandled_rejection','error',reason.message||String(reason),reason.stack||'',{kind:'promise'});
+    });
+    const originalFetch=window.fetch;
+    if(originalFetch){
+      window.fetch=function(){
+        return originalFetch.apply(this,arguments).then(response=>{
+          try{
+            const url=arguments[0]&&arguments[0].url?arguments[0].url:String(arguments[0]||'');
+            if(response.status>=500&&!url.includes('/api/client-diagnostics/')){
+              sendDiagnostic('http_error','warning',`HTTP ${response.status} ${response.statusText}`,'',{url:url.slice(0,300),status:response.status});
+            }
+          }catch(_){}
+          return response;
+        }).catch(error=>{
+          try{
+            const url=arguments[0]&&arguments[0].url?arguments[0].url:String(arguments[0]||'');
+            if(!url.includes('/api/client-diagnostics/'))sendDiagnostic('http_error','warning',error.message||String(error),error.stack||'',{url:url.slice(0,300)});
+          }catch(_){}
+          throw error;
+        });
+      };
+    }
+  })();
+</script>
 </body>
 </html>

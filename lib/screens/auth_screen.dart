@@ -14,7 +14,7 @@ import '../services/push_notification_service.dart';
 import '../services/interaction_feedback_service.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/profile_photo_picker.dart';
-import '../widgets/tranviko_ambient_overlay.dart';
+import '../widgets/tranviko_validation_motion.dart';
 import 'qr_device_login_screen.dart';
 
 class LoginScreen extends StatelessWidget {
@@ -50,6 +50,7 @@ class _AuthForm extends StatefulWidget {
 class _AuthFormState extends State<_AuthForm>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
+  final _validationMotion = TranvikoValidationController();
   final _nameController = TextEditingController();
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -188,6 +189,7 @@ class _AuthFormState extends State<_AuthForm>
     _loginCooldownTimer?.cancel();
     _registrationDraftTimer?.cancel();
     _entrance.dispose();
+    _validationMotion.dispose();
     _nameController.dispose();
     _usernameController.dispose();
     _emailController.dispose();
@@ -594,7 +596,9 @@ class _AuthFormState extends State<_AuthForm>
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateTranvikoForm(context, _formKey, _validationMotion)) {
+      return;
+    }
     if (widget.isRegister) {
       if (_registerStep < _registerStepCount - 1) {
         FocusScope.of(context).unfocus();
@@ -901,184 +905,192 @@ class _AuthFormState extends State<_AuthForm>
         opacity: _fade,
         child: SlideTransition(
           position: _slide,
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _AuthHeading(title: title, subtitle: subtitle),
-                SizedBox(height: widget.isRegister ? 18 : 26),
-                if (widget.isRegister) ...[
-                  _registerProgress(scheme),
+          child: TranvikoValidationMotion(
+            controller: _validationMotion,
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _AuthHeading(title: title, subtitle: subtitle),
+                  SizedBox(height: widget.isRegister ? 18 : 26),
+                  if (widget.isRegister) ...[
+                    _registerProgress(scheme),
+                    const SizedBox(height: 22),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 240),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(.045, 0),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      ),
+                      child: _registerStepBody(scheme),
+                    ),
+                  ] else ...[
+                    _AuthField(
+                      controller: _usernameController,
+                      label: appTC(context, 'usernameOrPhone'),
+                      icon: Icons.person_outline_rounded,
+                      keyboardType: TextInputType.text,
+                      textInputAction: TextInputAction.next,
+                      onChanged: (_) {
+                        _clearLoginChallenge();
+                      },
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return appTC(context, 'usernameRequired');
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _AuthField(
+                      controller: _passwordController,
+                      label: appTC(context, 'password'),
+                      icon: Icons.lock_outline_rounded,
+                      obscureText: !_passwordVisible,
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) {
+                        if (!_loading) unawaited(_submit());
+                      },
+                      onChanged: (_) {
+                        _clearLoginChallenge();
+                      },
+                      suffixIcon: IconButton(
+                        tooltip: _passwordVisible
+                            ? 'Masquer le mot de passe'
+                            : 'Afficher le mot de passe',
+                        onPressed: () => setState(
+                          () => _passwordVisible = !_passwordVisible,
+                        ),
+                        icon: Icon(
+                          _passwordVisible
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                        ),
+                      ),
+                      validator: (value) => value == null || value.length < 8
+                          ? 'Utilisez au moins 8 caracteres'
+                          : null,
+                    ),
+                  ],
+                  if (!widget.isRegister) ...[
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () =>
+                            Navigator.pushNamed(context, '/forgot-password'),
+                        child: const Text('Mot de passe oublie ?'),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: _rememberMe,
+                          onChanged: (value) =>
+                              setState(() => _rememberMe = value ?? true),
+                        ),
+                        Expanded(child: Text(appTC(context, 'rememberMe'))),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 22),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 240),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(.045, 0),
-                          end: Offset.zero,
-                        ).animate(animation),
-                        child: child,
-                      ),
+                  if (_loginCooldownSeconds > 0) ...[
+                    _LoginCooldownBanner(
+                      label: _cooldownLabel(_loginCooldownSeconds),
                     ),
-                    child: _registerStepBody(scheme),
-                  ),
-                ] else ...[
-                  _AuthField(
-                    controller: _usernameController,
-                    label: appTC(context, 'usernameOrPhone'),
-                    icon: Icons.person_outline_rounded,
-                    keyboardType: TextInputType.text,
-                    textInputAction: TextInputAction.next,
-                    onChanged: (_) {
-                      _clearLoginChallenge();
-                    },
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return appTC(context, 'usernameRequired');
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _AuthField(
-                    controller: _passwordController,
-                    label: appTC(context, 'password'),
-                    icon: Icons.lock_outline_rounded,
-                    obscureText: !_passwordVisible,
-                    textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) {
-                      if (!_loading) unawaited(_submit());
-                    },
-                    onChanged: (_) {
-                      _clearLoginChallenge();
-                    },
-                    suffixIcon: IconButton(
-                      tooltip: _passwordVisible
-                          ? 'Masquer le mot de passe'
-                          : 'Afficher le mot de passe',
-                      onPressed: () =>
-                          setState(() => _passwordVisible = !_passwordVisible),
-                      icon: Icon(
-                        _passwordVisible
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined,
-                      ),
-                    ),
-                    validator: (value) => value == null || value.length < 8
-                        ? 'Utilisez au moins 8 caracteres'
-                        : null,
-                  ),
-                ],
-                if (!widget.isRegister) ...[
-                  const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () =>
-                          Navigator.pushNamed(context, '/forgot-password'),
-                      child: const Text('Mot de passe oublie ?'),
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: _rememberMe,
-                        onChanged: (value) =>
-                            setState(() => _rememberMe = value ?? true),
-                      ),
-                      Expanded(child: Text(appTC(context, 'rememberMe'))),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 22),
-                if (_loginCooldownSeconds > 0) ...[
-                  _LoginCooldownBanner(
-                    label: _cooldownLabel(_loginCooldownSeconds),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                SizedBox(
-                  height: 54,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                    ),
-                    onPressed: _loading || _loginCooldownSeconds > 0
-                        ? null
-                        : _submit,
-                    icon: _loading
-                        ? const SizedBox(
-                            width: 19,
-                            height: 19,
-                            child: CircularProgressIndicator(strokeWidth: 2.2),
-                          )
-                        : Icon(
-                            widget.isRegister
-                                ? _registerStep == _registerStepCount - 1
-                                      ? Icons.mark_email_read_rounded
-                                      : Icons.arrow_forward_rounded
-                                : Icons.login_rounded,
-                          ),
-                    label: Text(
-                      _loading ? appTC(context, 'pleaseWait') : submitLabel,
-                    ),
-                  ),
-                ),
-                if (!widget.isRegister) ...[
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 12),
+                  ],
                   SizedBox(
-                    height: 50,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
+                    height: 54,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(18),
                         ),
                       ),
-                      onPressed: _loading
+                      onPressed: _loading || _loginCooldownSeconds > 0
                           ? null
-                          : () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const QrDeviceLoginScreen(
-                                  allowAccountQr: false,
-                                  loginMode: true,
-                                ),
+                          : _submit,
+                      icon: _loading
+                          ? const SizedBox(
+                              width: 19,
+                              height: 19,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
                               ),
+                            )
+                          : Icon(
+                              widget.isRegister
+                                  ? _registerStep == _registerStepCount - 1
+                                        ? Icons.mark_email_read_rounded
+                                        : Icons.arrow_forward_rounded
+                                  : Icons.login_rounded,
                             ),
-                      icon: const Icon(Icons.qr_code_scanner_rounded),
-                      label: const Text('Se connecter avec QR'),
+                      label: Text(
+                        _loading ? appTC(context, 'pleaseWait') : submitLabel,
+                      ),
                     ),
                   ),
-                ],
-                const SizedBox(height: 22),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 2,
-                  children: [
-                    Text(
-                      widget.isRegister
-                          ? 'Vous avez deja un compte ?'
-                          : 'Vous n avez pas de compte ?',
-                    ),
-                    TextButton(
-                      onPressed: _loading ? null : _switchMode,
-                      child: Text(
-                        widget.isRegister ? 'Se connecter' : 'Creer un compte',
+                  if (!widget.isRegister) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 50,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                        ),
+                        onPressed: _loading
+                            ? null
+                            : () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const QrDeviceLoginScreen(
+                                    allowAccountQr: false,
+                                    loginMode: true,
+                                  ),
+                                ),
+                              ),
+                        icon: const Icon(Icons.qr_code_scanner_rounded),
+                        label: const Text('Se connecter avec QR'),
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 8),
-                _SecurityNote(color: scheme.primary),
-              ],
+                  const SizedBox(height: 22),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 2,
+                    children: [
+                      Text(
+                        widget.isRegister
+                            ? 'Vous avez deja un compte ?'
+                            : 'Vous n avez pas de compte ?',
+                      ),
+                      TextButton(
+                        onPressed: _loading ? null : _switchMode,
+                        child: Text(
+                          widget.isRegister
+                              ? 'Se connecter'
+                              : 'Creer un compte',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _SecurityNote(color: scheme.primary),
+                ],
+              ),
             ),
           ),
         ),
@@ -1633,44 +1645,25 @@ class _AuthScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return WillPopScope(
-      onWillPop: () async {
+    final canPop = onBack == null && Navigator.of(context).canPop();
+    return PopScope(
+      canPop: canPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
         if (onBack != null) {
           onBack!();
-          return false;
+          return;
         }
-        if (Navigator.of(context).canPop()) return true;
         Navigator.pushNamedAndRemoveUntil(context, '/', (_) => false);
-        return false;
       },
       child: Scaffold(
         backgroundColor: dark ? const Color(0xFF07101D) : Colors.white,
         body: Stack(
           children: [
             Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: dark
-                        ? const [
-                            Color(0xFF061425),
-                            Color(0xFF0A3156),
-                            Color(0xFF082030),
-                          ]
-                        : [
-                            scheme.primary,
-                            Color.lerp(scheme.primary, scheme.secondary, .48)!,
-                            Colors.white,
-                          ],
-                    stops: const [.0, .30, .76],
-                  ),
-                ),
+              child: ColoredBox(
+                color: dark ? const Color(0xFF071525) : scheme.primary,
               ),
-            ),
-            const Positioned.fill(
-              child: TranvikoAmbientOverlay(intensity: 2.4),
             ),
             SafeArea(
               child: SingleChildScrollView(
@@ -1710,7 +1703,7 @@ class _AuthScaffold extends StatelessWidget {
                               padding: const EdgeInsets.all(5),
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: .96),
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(8),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: .14),
@@ -1750,7 +1743,7 @@ class _AuthScaffold extends StatelessWidget {
                             color: dark
                                 ? const Color(0xEE0D1C2D)
                                 : Colors.white,
-                            borderRadius: BorderRadius.circular(30),
+                            borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: Colors.white.withValues(
                                 alpha: dark ? .12 : .72,
@@ -1767,7 +1760,7 @@ class _AuthScaffold extends StatelessWidget {
                             ],
                           ),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(30),
+                            borderRadius: BorderRadius.circular(8),
                             child: Stack(
                               children: [
                                 Positioned(
@@ -1802,15 +1795,13 @@ class _AuthScaffold extends StatelessWidget {
                         ),
                         const SizedBox(height: 18),
                         Text(
-                          'TRANVIKO  •  MOBILITE CONNECTEE',
+                          'TRANVIKO  |  MOBILITE CONNECTEE',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: dark
-                                ? Colors.white.withValues(alpha: .58)
-                                : const Color(0xFF284565),
+                            color: Colors.white.withValues(alpha: .68),
                             fontSize: 10,
                             fontWeight: FontWeight.w900,
-                            letterSpacing: 1.2,
+                            letterSpacing: 0,
                           ),
                         ),
                       ],

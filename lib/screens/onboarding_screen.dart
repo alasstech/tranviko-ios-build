@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import '../services/native_call_service.dart';
 import '../services/permission_status_service.dart';
 import '../services/push_notification_service.dart';
+import '../widgets/location_permission_disclosure.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -56,12 +57,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       'native_calls',
       'camera',
       'microphone',
-      'media',
       'location',
       'contacts',
     ];
     for (final key in keys) {
       try {
+        if (key == 'location') {
+          final disclosed = await showLocationPermissionDisclosure(context);
+          if (!disclosed) continue;
+        }
         await PermissionStatusService.request(key);
         await Future<void>.delayed(const Duration(milliseconds: 180));
       } catch (_) {

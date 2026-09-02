@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart'; // 1. Import package de base
@@ -51,7 +52,8 @@ import 'services/native_call_service.dart';
 import 'services/local_cache_service.dart';
 import 'services/story_cache_service.dart';
 import 'services/websocket_connector.dart';
-import 'widgets/tranviko_ambient_overlay.dart';
+import 'services/interaction_feedback_service.dart';
+import 'widgets/tranviko_interaction_surface.dart';
 
 final GlobalKey<ScaffoldMessengerState> rootMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -61,6 +63,47 @@ const String _pendingNativeAcceptedCallKey = 'pending_native_accepted_call';
 const String _recentNativeAcceptPrefix = 'recent_native_accept_';
 const String _programmaticNativeEndPrefix = 'programmatic_native_end_';
 String? _activeAudioCallRouteId;
+
+void _installFrameDiagnostics() {
+  var slowFrameCount = 0;
+  var frameCount = 0;
+  var worstFrameMs = 0.0;
+  Timer? reportingTimer;
+
+  SchedulerBinding.instance.addTimingsCallback((timings) {
+    for (final timing in timings) {
+      frameCount += 1;
+      final frameMs =
+          (timing.buildDuration + timing.rasterDuration).inMicroseconds / 1000;
+      if (frameMs >= 32) slowFrameCount += 1;
+      if (frameMs > worstFrameMs) worstFrameMs = frameMs;
+    }
+    reportingTimer ??= Timer(const Duration(seconds: 60), () {
+      final total = frameCount;
+      final slow = slowFrameCount;
+      final worst = worstFrameMs;
+      reportingTimer = null;
+      frameCount = 0;
+      slowFrameCount = 0;
+      worstFrameMs = 0;
+      if (total < 20 || slow < 6) return;
+      unawaited(
+        ApiService.reportClientDiagnostic(
+          eventType: 'performance',
+          severity: slow / total >= .35 ? 'warning' : 'info',
+          message: 'Ralentissements UI detectes sur $slow images sur $total.',
+          screen: 'flutter_frames',
+          extra: {
+            'frameCount': total,
+            'slowFrameCount': slow,
+            'slowFrameRatio': slow / total,
+            'worstFrameMs': worst,
+          },
+        ),
+      );
+    });
+  });
+}
 
 Future<FirebaseApp> initializeTranvikoFirebase() {
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
@@ -142,7 +185,9 @@ Future<void> callkitBackgroundHandler(CallEvent event) async {
   if (event is CallEventActionCallDecline) params = event.callKitParams;
   if (event is CallEventActionCallEnded) params = event.callKitParams;
   final extra = Map<String, dynamic>.from(params?.extra ?? const {});
-  final id = params?.id ?? extra['callId']?.toString() ?? '';
+  final id = extra['callId']?.toString().isNotEmpty == true
+      ? extra['callId'].toString()
+      : params?.id ?? '';
   if (id.isNotEmpty) extra['callId'] = id;
   if (event is CallEventActionCallAccept) {
     extra['nativeAction'] = 'accept';
@@ -355,9 +400,9 @@ Future<void> drainPendingAcceptedCall() async {
       for (final call in activeCalls) {
         final extra = Map<String, dynamic>.from(call.extra ?? const {});
         if (extra['type'] != 'incoming_audio_call') continue;
-        final callId = call.id.isNotEmpty
-            ? call.id
-            : extra['callId']?.toString() ?? '';
+        final callId = extra['callId']?.toString().isNotEmpty == true
+            ? extra['callId'].toString()
+            : call.id;
         if (callId.isEmpty) continue;
         final acceptedAt = preferences.getInt(
           '$_recentNativeAcceptPrefix$callId',
@@ -465,6 +510,35 @@ void _restoreActiveCallRoute() {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _installFrameDiagnostics();
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    unawaited(
+      ApiService.reportClientDiagnostic(
+        eventType: 'flutter_error',
+        severity: 'error',
+        message: details.exceptionAsString(),
+        stack: details.stack?.toString() ?? '',
+        screen: 'flutter_global',
+        extra: {
+          'library': details.library,
+          'context': details.context?.toDescription(),
+        },
+      ),
+    );
+  };
+  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    unawaited(
+      ApiService.reportClientDiagnostic(
+        eventType: 'crash',
+        severity: 'fatal',
+        message: error.toString(),
+        stack: stack.toString(),
+        screen: 'platform_dispatcher',
+      ),
+    );
+    return true;
+  };
   try {
     await lk.LiveKitClient.initialize(
       initialAudioSessionOptions: const lk.AudioSessionOptions.communication(),
@@ -487,6 +561,9 @@ void main() async {
   await initializeDateFormatting('ar', null);
   await initializeDateFormatting('pt_PT', null);
   final preferences = await SharedPreferences.getInstance();
+  await TranvikoInteractionFeedback.configure(preferences: preferences);
+  unawaited(TranvikoInteractionFeedback.warmUp());
+  unawaited(ApiService.flushQueuedClientDiagnostics());
   await ApiService.loadStoredCompany();
   final themeMode = preferences.getString('theme_mode') ?? 'system';
   appThemeMode.value = switch (themeMode) {
@@ -756,7 +833,7 @@ class MyApp extends StatelessWidget {
           builder: (context, textScale, _) => ValueListenableBuilder<Color>(
             valueListenable: appSeedColor,
             builder: (context, seed, _) => MaterialApp(
-              title: 'Alass Tech - Transport',
+              title: 'Tranviko',
               scaffoldMessengerKey: rootMessengerKey,
               navigatorKey: rootNavigatorKey,
               themeMode: mode,
@@ -779,18 +856,17 @@ class MyApp extends StatelessWidget {
                   data: media.copyWith(
                     textScaler: TextScaler.linear(textScale),
                   ),
-                  child: AppLockGate(
-                    child: CallSocketHost(
-                      child: NotificationSocketHost(
-                        child: Stack(
-                          children: [
-                            child ?? const SizedBox.shrink(),
-                            const Positioned.fill(
-                              child: TranvikoAmbientOverlay(intensity: 1.35),
-                            ),
-                            const _ShareTargetBootstrap(),
-                            const _ActiveCallMiniOverlay(),
-                          ],
+                  child: TranvikoInteractionSurface(
+                    child: AppLockGate(
+                      child: CallSocketHost(
+                        child: NotificationSocketHost(
+                          child: Stack(
+                            children: [
+                              child ?? const SizedBox.shrink(),
+                              const _ShareTargetBootstrap(),
+                              const _ActiveCallMiniOverlay(),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -874,21 +950,102 @@ class MyApp extends StatelessWidget {
     final surface = isDark ? const Color(0xFF06101D) : const Color(0xFFFFFFFF);
     final card = isDark ? const Color(0xFF0C1A2B) : const Color(0xFFFFFFFF);
     final outline = isDark ? const Color(0xFF29405E) : const Color(0xFFD8E3F0);
-    final scheme = ColorScheme.fromSeed(
+    final generatedScheme = ColorScheme.fromSeed(
       seedColor: baseSeed,
       brightness: brightness,
       primary: baseSeed,
-      secondary: isDark ? const Color(0xFF6ED9FF) : const Color(0xFF008FC7),
-      tertiary: isDark ? const Color(0xFF79E8C0) : const Color(0xFF0C9B75),
+      secondary: isDark ? const Color(0xFF66DCD2) : const Color(0xFF008F88),
+      tertiary: isDark ? const Color(0xFFFFA384) : const Color(0xFFE05F3C),
       surface: surface,
       error: isDark ? const Color(0xFFFF7B82) : const Color(0xFFD9364B),
     );
+    final scheme = generatedScheme.copyWith(
+      surface: surface,
+      surfaceContainerLowest: surface,
+      surfaceContainerLow: isDark
+          ? const Color(0xFF091522)
+          : const Color(0xFFFCFCFD),
+      surfaceContainer: isDark
+          ? const Color(0xFF0D1B2A)
+          : const Color(0xFFF7F8F9),
+      surfaceContainerHigh: isDark
+          ? const Color(0xFF122235)
+          : const Color(0xFFF1F3F5),
+      surfaceContainerHighest: isDark
+          ? const Color(0xFF182B42)
+          : const Color(0xFFE9EDF0),
+      onSurface: isDark ? const Color(0xFFF7FAFC) : const Color(0xFF101418),
+      onSurfaceVariant: isDark
+          ? const Color(0xFFB9C8D8)
+          : const Color(0xFF4B5563),
+      outline: isDark ? const Color(0xFF486078) : const Color(0xFFCDD4DC),
+      outlineVariant: isDark
+          ? const Color(0xFF263C54)
+          : const Color(0xFFE4E8ED),
+    );
+    final textTheme = ThemeData(useMaterial3: true, brightness: brightness)
+        .textTheme
+        .copyWith(
+          displayLarge: TextStyle(
+            color: scheme.onSurface,
+            fontSize: 40,
+            height: 1.08,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0,
+          ),
+          headlineLarge: TextStyle(
+            color: scheme.onSurface,
+            fontSize: 30,
+            height: 1.12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0,
+          ),
+          headlineMedium: TextStyle(
+            color: scheme.onSurface,
+            fontSize: 24,
+            height: 1.16,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0,
+          ),
+          titleLarge: TextStyle(
+            color: scheme.onSurface,
+            fontSize: 20,
+            height: 1.22,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0,
+          ),
+          titleMedium: TextStyle(
+            color: scheme.onSurface,
+            fontSize: 16,
+            height: 1.3,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0,
+          ),
+          bodyLarge: TextStyle(
+            color: scheme.onSurface,
+            fontSize: 16,
+            height: 1.45,
+            letterSpacing: 0,
+          ),
+          bodyMedium: TextStyle(
+            color: scheme.onSurfaceVariant,
+            fontSize: 14,
+            height: 1.42,
+            letterSpacing: 0,
+          ),
+          labelLarge: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0,
+          ),
+        );
     return ThemeData(
       useMaterial3: true,
       brightness: brightness,
       fontFamily: 'Roboto',
       primaryColor: baseSeed,
       colorScheme: scheme,
+      textTheme: textTheme,
       scaffoldBackgroundColor: surface,
       canvasColor: surface,
       dividerColor: outline,
@@ -936,7 +1093,9 @@ class MyApp extends StatelessWidget {
           backgroundColor: baseSeed,
           foregroundColor: scheme.onPrimary,
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           minimumSize: const Size(64, 52),
           padding: const EdgeInsets.symmetric(vertical: 16),
         ),
@@ -946,7 +1105,9 @@ class MyApp extends StatelessWidget {
           backgroundColor: baseSeed,
           foregroundColor: scheme.onPrimary,
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           minimumSize: const Size(64, 52),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
         ),
@@ -955,7 +1116,9 @@ class MyApp extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           foregroundColor: baseSeed,
           side: BorderSide(color: outline),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           minimumSize: const Size(64, 50),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         ),
@@ -963,7 +1126,9 @@ class MyApp extends StatelessWidget {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: baseSeed,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         ),
       ),
@@ -971,7 +1136,7 @@ class MyApp extends StatelessWidget {
         style: IconButton.styleFrom(
           foregroundColor: scheme.onSurfaceVariant,
           minimumSize: const Size(44, 44),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: const CircleBorder(),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
@@ -980,6 +1145,7 @@ class MyApp extends StatelessWidget {
         elevation: 0,
         height: 68,
         labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+        indicatorShape: const CircleBorder(),
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
             color: states.contains(WidgetState.selected)
@@ -1013,26 +1179,127 @@ class MyApp extends StatelessWidget {
         filled: true,
         fillColor: isDark ? const Color(0xFF12233A) : Colors.white,
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 16,
+          horizontal: 17,
+          vertical: 17,
+        ),
+        labelStyle: TextStyle(
+          color: scheme.onSurfaceVariant,
+          fontWeight: FontWeight.w700,
+        ),
+        floatingLabelStyle: TextStyle(
+          color: baseSeed,
+          fontWeight: FontWeight.w800,
+        ),
+        hintStyle: TextStyle(
+          color: scheme.onSurfaceVariant.withValues(alpha: .72),
+          fontWeight: FontWeight.w500,
+        ),
+        errorStyle: TextStyle(
+          color: scheme.error,
+          fontWeight: FontWeight.w700,
+          height: 1.2,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: outline),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: outline),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: outline),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: baseSeed, width: 1.7),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: scheme.error),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: scheme.error, width: 1.4),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: scheme.error, width: 1.8),
         ),
         prefixIconColor: baseSeed,
+      ),
+      searchBarTheme: SearchBarThemeData(
+        backgroundColor: WidgetStatePropertyAll(card),
+        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+        elevation: const WidgetStatePropertyAll(0),
+        side: WidgetStatePropertyAll(BorderSide(color: outline)),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        textStyle: WidgetStatePropertyAll(
+          TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w600),
+        ),
+        hintStyle: WidgetStatePropertyAll(
+          TextStyle(color: scheme.onSurfaceVariant),
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? scheme.onPrimary
+                : scheme.onSurfaceVariant,
+          ),
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected) ? baseSeed : card,
+          ),
+          side: WidgetStatePropertyAll(BorderSide(color: outline)),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          textStyle: const WidgetStatePropertyAll(
+            TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0),
+          ),
+        ),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? scheme.onPrimary
+              : scheme.outline,
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) =>
+              states.contains(WidgetState.selected) ? baseSeed : outline,
+        ),
+        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? baseSeed
+              : Colors.transparent,
+        ),
+        checkColor: WidgetStatePropertyAll(scheme.onPrimary),
+        side: BorderSide(color: outline, width: 1.4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: isDark
+            ? const Color(0xFF17263A)
+            : const Color(0xFF071B4A),
+        contentTextStyle: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0,
+        ),
+        behavior: SnackBarBehavior.floating,
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF071B4A),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        textStyle: TextStyle(
+          color: isDark ? const Color(0xFF071B4A) : Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: card,
@@ -1085,8 +1352,20 @@ class _TranvikoPageTransitionsBuilder extends PageTransitionsBuilder {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    // Navigation must stay immediate; feedback lives on actions and loading states.
-    return child;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion || route.isFirst) return child;
+    final entrance = animation.drive(CurveTween(curve: Curves.easeOutCubic));
+    return FadeTransition(
+      opacity: Tween<double>(begin: .9, end: 1).animate(entrance),
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, .018),
+          end: Offset.zero,
+        ).animate(entrance),
+        child: child,
+      ),
+    );
   }
 }
 

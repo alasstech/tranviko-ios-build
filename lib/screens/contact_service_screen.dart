@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_text.dart';
 import '../services/api_service.dart';
+import '../utils/call_id.dart';
+import '../widgets/app_toast.dart';
+import '../widgets/tranviko_validation_motion.dart';
 import 'audio_call_screen.dart';
 
 class ContactServiceScreen extends StatefulWidget {
@@ -13,6 +16,7 @@ class ContactServiceScreen extends StatefulWidget {
 
 class _ContactServiceScreenState extends State<ContactServiceScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _validationMotion = TranvikoValidationController();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -37,6 +41,7 @@ class _ContactServiceScreenState extends State<ContactServiceScreen> {
 
   @override
   void dispose() {
+    _validationMotion.dispose();
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
@@ -46,7 +51,9 @@ class _ContactServiceScreenState extends State<ContactServiceScreen> {
   }
 
   Future<void> _sendMessage() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateTranvikoForm(context, _formKey, _validationMotion)) {
+      return;
+    }
     setState(() => _sending = true);
     try {
       final result = await ApiService.sendContactServiceMessage(
@@ -57,24 +64,26 @@ class _ContactServiceScreenState extends State<ContactServiceScreen> {
         message: _messageController.text.trim(),
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['message']?.toString() ?? 'Message envoye.'),
-        ),
+      AppToast.show(
+        context,
+        result['message']?.toString() ?? 'Message envoye.',
+        tone: AppToastTone.success,
       );
       _messageController.clear();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      AppToast.show(
         context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
+        AppToast.friendlyError(error),
+        tone: AppToastTone.error,
+      );
     } finally {
       if (mounted) setState(() => _sending = false);
     }
   }
 
   void _startServiceCall() {
-    final callId = 'service-call-${DateTime.now().microsecondsSinceEpoch}';
+    final callId = newCallId();
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -141,98 +150,103 @@ class _ContactServiceScreenState extends State<ContactServiceScreen> {
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      appTC(context, 'sendMessageTitle'),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
+              child: TranvikoValidationMotion(
+                controller: _validationMotion,
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        appTC(context, 'sendMessageTitle'),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _nameController,
-                      decoration: InputDecoration(
-                        labelText: appTC(context, 'fullName'),
-                        prefixIcon: const Icon(Icons.person),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _nameController,
+                        decoration: InputDecoration(
+                          labelText: appTC(context, 'fullName'),
+                          prefixIcon: const Icon(Icons.person),
+                        ),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                            ? appTC(context, 'nameRequired')
+                            : null,
                       ),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? appTC(context, 'nameRequired')
-                          : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: InputDecoration(
-                        labelText: appTC(context, 'email'),
-                        prefixIcon: const Icon(Icons.alternate_email),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: InputDecoration(
+                          labelText: appTC(context, 'email'),
+                          prefixIcon: const Icon(Icons.alternate_email),
+                        ),
+                        validator: (value) {
+                          final text = value?.trim() ?? '';
+                          if (text.isEmpty)
+                            return appTC(context, 'emailRequired');
+                          if (!text.contains('@'))
+                            return appTC(context, 'invalidEmail');
+                          return null;
+                        },
                       ),
-                      validator: (value) {
-                        final text = value?.trim() ?? '';
-                        if (text.isEmpty)
-                          return appTC(context, 'emailRequired');
-                        if (!text.contains('@'))
-                          return appTC(context, 'invalidEmail');
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        labelText: appTC(context, 'phone'),
-                        prefixIcon: const Icon(Icons.phone),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: InputDecoration(
+                          labelText: appTC(context, 'phone'),
+                          prefixIcon: const Icon(Icons.phone),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _subjectController,
-                      decoration: InputDecoration(
-                        labelText: appTC(context, 'subject'),
-                        prefixIcon: const Icon(Icons.subject),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _subjectController,
+                        decoration: InputDecoration(
+                          labelText: appTC(context, 'subject'),
+                          prefixIcon: const Icon(Icons.subject),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _messageController,
-                      minLines: 4,
-                      maxLines: 6,
-                      decoration: InputDecoration(
-                        labelText: appTC(context, 'message'),
-                        prefixIcon: const Icon(Icons.message),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _messageController,
+                        minLines: 4,
+                        maxLines: 6,
+                        decoration: InputDecoration(
+                          labelText: appTC(context, 'message'),
+                          prefixIcon: const Icon(Icons.message),
+                        ),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                            ? appTC(context, 'messageRequired')
+                            : null,
                       ),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? appTC(context, 'messageRequired')
-                          : null,
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: _sending ? null : _sendMessage,
-                      icon: _sending
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.send),
-                      label: Text(
-                        _sending
-                            ? appTC(context, 'sending')
-                            : appTC(context, 'sendMessageAction'),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: _sending ? null : _sendMessage,
+                        icon: _sending
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.send),
+                        label: Text(
+                          _sending
+                              ? appTC(context, 'sending')
+                              : appTC(context, 'sendMessageAction'),
+                        ),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                        ),
                       ),
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(50),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

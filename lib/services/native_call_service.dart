@@ -10,6 +10,7 @@ import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_service.dart';
+import '../utils/call_id.dart';
 
 class NativeCallService {
   static const Duration _acceptedNativeEndGrace = Duration(seconds: 4);
@@ -25,6 +26,7 @@ class NativeCallService {
   static final Set<String> _visibleCallIds = <String>{};
   static final Map<String, DateTime> _acceptedAtByCallId = <String, DateTime>{};
   static final Set<String> _programmaticEndCallIds = <String>{};
+  static final Map<String, String> _nativeIdByCallId = <String, String>{};
   static final AudioRecorder _audioPermissionRecorder = AudioRecorder();
   static bool _permissionsRequestedThisRun = false;
 
@@ -94,6 +96,8 @@ class NativeCallService {
     final callId = data['callId']?.toString().isNotEmpty == true
         ? data['callId'].toString()
         : DateTime.now().millisecondsSinceEpoch.toString();
+    final nativeCallId = isCallUuid(callId) ? callId : newCallId();
+    _nativeIdByCallId[callId] = nativeCallId;
     final callerName = data['callerName']?.toString().isNotEmpty == true
         ? data['callerName'].toString()
         : data['title']?.toString().isNotEmpty == true
@@ -107,7 +111,7 @@ class NativeCallService {
     if (!await _claimIncomingCall(callId)) return;
 
     final params = CallKitParams(
-      id: callId,
+      id: nativeCallId,
       nameCaller: callerName,
       appName: 'Tranviko',
       handle: callerId.isEmpty ? callerName : callerId,
@@ -115,6 +119,8 @@ class NativeCallService {
       duration: 45000,
       missedCallNotification: null,
       extra: Map<String, dynamic>.from(data)
+        ..['callId'] = callId
+        ..['nativeCallId'] = nativeCallId
         ..['type'] = 'incoming_audio_call'
         ..['media'] = isVideo ? 'video' : 'audio'
         ..['callMode'] = isVideo ? 'video' : 'audio',
@@ -169,7 +175,12 @@ class NativeCallService {
       final activeCalls = await FlutterCallkitIncoming.activeCalls();
       for (final dynamic call in activeCalls) {
         final activeId = call.id?.toString() ?? '';
-        if (activeId == callId) {
+        final activeExtra = Map<String, dynamic>.from(
+          call.extra ?? const <String, dynamic>{},
+        );
+        final activeSignallingId = activeExtra['callId']?.toString() ?? '';
+        final expectedNativeId = _nativeIdByCallId[callId] ?? callId;
+        if (activeId == expectedNativeId || activeSignallingId == callId) {
           _visibleCallIds.remove(callId);
           return false;
         }
@@ -211,6 +222,7 @@ class NativeCallService {
     if (kIsWeb || callId.isEmpty) return;
     _visibleCallIds.remove(callId);
     _programmaticEndCallIds.add(callId);
+    final nativeCallId = _nativeIdByCallId.remove(callId) ?? callId;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt(
@@ -218,7 +230,7 @@ class NativeCallService {
         DateTime.now().millisecondsSinceEpoch,
       );
     } catch (_) {}
-    await FlutterCallkitIncoming.endCall(callId);
+    await FlutterCallkitIncoming.endCall(nativeCallId);
   }
 
   static Future<bool> _wasProgrammaticallyEnded(String callId) async {
@@ -237,12 +249,15 @@ class NativeCallService {
   static Future<void> endAllCalls() async {
     if (kIsWeb) return;
     _visibleCallIds.clear();
+    _nativeIdByCallId.clear();
     await FlutterCallkitIncoming.endAllCalls();
   }
 
   static Future<void> setCallConnected(String callId) async {
     if (kIsWeb || callId.isEmpty) return;
-    await FlutterCallkitIncoming.setCallConnected(callId);
+    await FlutterCallkitIncoming.setCallConnected(
+      _nativeIdByCallId[callId] ?? callId,
+    );
   }
 
   static void _handleEvent(CallEvent? event) {
@@ -256,8 +271,15 @@ class NativeCallService {
     if (event is CallEventActionCallDecline) params = event.callKitParams;
     if (event is CallEventActionCallEnded) params = event.callKitParams;
     final extra = Map<String, dynamic>.from(params?.extra ?? const {});
-    final id = params?.id ?? extra['callId']?.toString() ?? '';
+    final nativeId = params?.id ?? extra['nativeCallId']?.toString() ?? '';
+    final id = extra['callId']?.toString().isNotEmpty == true
+        ? extra['callId'].toString()
+        : nativeId;
     if (id.isNotEmpty) extra['callId'] = id;
+    if (nativeId.isNotEmpty) {
+      extra['nativeCallId'] = nativeId;
+      if (id.isNotEmpty) _nativeIdByCallId[id] = nativeId;
+    }
     if (event is CallEventActionCallAccept) {
       extra['nativeAction'] = 'accept';
       extra['type'] = 'incoming_audio_call';

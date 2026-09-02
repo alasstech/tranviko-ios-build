@@ -11,9 +11,9 @@
 
 1. Enregistrer l'App ID explicite `app.tranviko.mobile` dans Certificates, Identifiers & Profiles.
 2. Activer Push Notifications pour cet App ID.
-3. Creer deux cles APNs `.p8`, une `Sandbox` et une `Production`, conserver leurs Key ID et relever le Team ID. Chaque fichier ne se telecharge qu'une fois.
-4. Preferer des cles `Topic Specific` limitees a Tranviko et autorisant `app.tranviko.mobile.voip`. Autoriser aussi `app.tranviko.mobile` si elles sont reutilisees par Firebase pour les notifications ordinaires ; utiliser `Team Scoped` si Apple ne propose pas les topics necessaires.
-5. Dans Firebase > Parametres du projet > Cloud Messaging, televerser les cles APNs dans les emplacements proposes pour l'application iOS Tranviko.
+3. Creer une cle d'authentification APNs `.p8`, conserver son Key ID et relever le Team ID. Une cle APNs Team Scoped fonctionne avec Sandbox et Production. Si le portail impose des cles Topic Specific par environnement, creer la cle associee correspondante : le backend Tranviko accepte les deux modes.
+4. Limiter la cle aux topics Tranviko lorsque l'interface Apple le permet. Le topic VoIP utilise par le backend est `app.tranviko.mobile.voip` et le topic des notifications ordinaires est `app.tranviko.mobile`.
+5. Dans Firebase > Parametres du projet > Cloud Messaging, televerser la cle APNs pour l'application iOS Tranviko afin que FCM distribue aussi les notifications ordinaires sur iPhone.
 6. Inviter le developpeur Mac dans l'equipe Apple/App Store Connect. Ne pas partager le mot de passe du proprietaire.
 7. Dans Xcode, choisir cette equipe et laisser Automatically manage signing actif.
 8. Verifier Push Notifications et Background Modes : Background fetch, Remote notifications, Voice over IP et Location updates.
@@ -28,6 +28,8 @@ Les appels quand l'application est ouverte utilisent LiveKit et CallKit. Pour l'
 - un signalement immediat de chaque push VoIP a CallKit.
 
 La couche iOS enregistre le jeton PushKit dans le backend authentifie. Le backend signe ensuite ses requetes APNs VoIP avec la cle Apple conservee uniquement sur le VPS. Il evite le doublon FCM/PushKit appareil par appareil. Le deploiement de la cle et le test sur deux vrais iPhone restent obligatoires avant publication. Un push FCM standard ne remplace pas ce canal lorsque l'application est forcee a quitter.
+
+La cle `.p8` va uniquement sur le VPS et dans Firebase. Le developpeur Mac n'en a pas besoin pour signer ou compiler l'IPA.
 
 ## Controle avant TestFlight
 

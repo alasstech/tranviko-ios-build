@@ -6,6 +6,13 @@ const Map<String, Map<String, String>> appTranslations = {
   'fr': {
     'settingsTitle': 'Parametres',
     'display': 'Affichage',
+    'interactionFeedback': 'Sons et sensations',
+    'interactionSounds': 'Sons d interaction',
+    'interactionSoundsSub':
+        'Des sons courts accompagnent les actions importantes, sans interrompre les appels.',
+    'interactionHaptics': 'Retour haptique',
+    'interactionHapticsSub':
+        'Une vibration legere confirme les selections et les validations.',
     'security': 'Securite',
     'clientPreferences': 'Preferences client',
     'notifications': 'Notifications',
@@ -59,6 +66,11 @@ const Map<String, Map<String, String>> appTranslations = {
     'helpCenterSub': 'Guides, contact et suivi des demandes.',
     'aboutSub': 'Version 1.0.0, Tranviko.',
     'privacySub': 'Donnees, localisation, appels et notifications.',
+    'deleteAccount': 'Supprimer mon compte',
+    'deleteAccountSub':
+        'Demander la suppression du compte et des donnees associees.',
+    'deleteAccountOpenFailed':
+        'Impossible d ouvrir la page de suppression du compte.',
     'agentSpace': 'Espace agent',
     'directorSpace': 'Espace directeur',
     'messaging': 'Messagerie',
@@ -514,6 +526,11 @@ const Map<String, Map<String, String>> appTranslations = {
     'permissionCameraSub': 'Scan, photos et appels video.',
     'permissionLocationTitle': 'Position',
     'permissionLocationSub': 'Suivi GPS, trajet partage et cartes.',
+    'locationDisclosureTitle': 'Utilisation de la position',
+    'locationDisclosureBody':
+        'Tranviko utilise votre location pour les cartes, le depart et le partage de trajet. Lorsqu un agent active le suivi GPS d un trajet, Tranviko collecte la location en background, meme lorsque l application est fermee ou non utilisee, afin d afficher la position du bus aux voyageurs et a la compagnie. Ces donnees ne sont pas utilisees pour la publicite.',
+    'locationDisclosureContinue': 'Continuer',
+    'locationDisclosureDecline': 'Pas maintenant',
     'permissionContactsTitle': 'Contacts',
     'permissionContactsSub': 'Retrouver les contacts deja sur Tranviko.',
     'permissionMediaTitle': 'Photos et videos',
@@ -522,6 +539,13 @@ const Map<String, Map<String, String>> appTranslations = {
   'en': {
     'settingsTitle': 'Settings',
     'display': 'Display',
+    'interactionFeedback': 'Sounds and feel',
+    'interactionSounds': 'Interaction sounds',
+    'interactionSoundsSub':
+        'Short sounds accompany important actions without interrupting calls.',
+    'interactionHaptics': 'Haptic feedback',
+    'interactionHapticsSub':
+        'A light vibration confirms selections and validations.',
     'security': 'Security',
     'clientPreferences': 'Customer preferences',
     'notifications': 'Notifications',
@@ -573,6 +597,9 @@ const Map<String, Map<String, String>> appTranslations = {
     'helpCenterSub': 'Guides, contact and request tracking.',
     'aboutSub': 'Version 1.0.0, Tranviko.',
     'privacySub': 'Data, location, calls and notifications.',
+    'deleteAccount': 'Delete my account',
+    'deleteAccountSub': 'Request deletion of the account and associated data.',
+    'deleteAccountOpenFailed': 'Unable to open the account deletion page.',
     'agentSpace': 'Agent area',
     'directorSpace': 'Director area',
     'messaging': 'Messaging',
@@ -1018,6 +1045,11 @@ const Map<String, Map<String, String>> appTranslations = {
     'permissionCameraSub': 'Scan, photos and video calls.',
     'permissionLocationTitle': 'Location',
     'permissionLocationSub': 'GPS tracking, shared trips and maps.',
+    'locationDisclosureTitle': 'Location use',
+    'locationDisclosureBody':
+        'Tranviko uses your location for maps, departure suggestions and trip sharing. When an agent starts GPS tracking for a trip, Tranviko collects location in the background, even when the app is closed or not in use, to show the bus position to passengers and the company. This data is not used for advertising.',
+    'locationDisclosureContinue': 'Continue',
+    'locationDisclosureDecline': 'Not now',
     'permissionContactsTitle': 'Contacts',
     'permissionContactsSub': 'Find contacts already on Tranviko.',
     'permissionMediaTitle': 'Photos and videos',
@@ -1026,6 +1058,13 @@ const Map<String, Map<String, String>> appTranslations = {
   'es': {
     'settingsTitle': 'Ajustes',
     'display': 'Pantalla',
+    'interactionFeedback': 'Sonidos y respuesta',
+    'interactionSounds': 'Sonidos de interaccion',
+    'interactionSoundsSub':
+        'Sonidos breves acompanan las acciones importantes sin interrumpir llamadas.',
+    'interactionHaptics': 'Respuesta haptica',
+    'interactionHapticsSub':
+        'Una vibracion ligera confirma selecciones y validaciones.',
     'security': 'Seguridad',
     'clientPreferences': 'Preferencias del cliente',
     'notifications': 'Notificaciones',
@@ -1077,6 +1116,11 @@ const Map<String, Map<String, String>> appTranslations = {
     'helpCenterSub': 'Guias, contacto y seguimiento de solicitudes.',
     'aboutSub': 'Version 1.0.0, Tranviko.',
     'privacySub': 'Datos, ubicacion, llamadas y notificaciones.',
+    'deleteAccount': 'Eliminar mi cuenta',
+    'deleteAccountSub':
+        'Solicitar la eliminacion de la cuenta y los datos asociados.',
+    'deleteAccountOpenFailed':
+        'No se puede abrir la pagina de eliminacion de cuenta.',
     'agentSpace': 'Espacio agente',
     'directorSpace': 'Espacio director',
     'messaging': 'Mensajeria',
@@ -1524,6 +1568,11 @@ const Map<String, Map<String, String>> appTranslations = {
     'permissionCameraSub': 'Escaneo, fotos y llamadas de video.',
     'permissionLocationTitle': 'Ubicacion',
     'permissionLocationSub': 'Seguimiento GPS, trayecto compartido y mapas.',
+    'locationDisclosureTitle': 'Uso de la ubicacion',
+    'locationDisclosureBody':
+        'Tranviko usa tu location para mapas, salida y viajes compartidos. Cuando un agente activa el seguimiento GPS de un viaje, Tranviko recopila location en background, incluso cuando la app esta cerrada o no esta en uso, para mostrar la posicion del bus a pasajeros y a la compania. Estos datos no se usan para publicidad.',
+    'locationDisclosureContinue': 'Continuar',
+    'locationDisclosureDecline': 'Ahora no',
     'permissionContactsTitle': 'Contactos',
     'permissionContactsSub': 'Encontrar contactos que ya estan en Tranviko.',
     'permissionMediaTitle': 'Fotos y videos',
@@ -1532,6 +1581,12 @@ const Map<String, Map<String, String>> appTranslations = {
   'ar': {
     'settingsTitle': 'الإعدادات',
     'display': 'العرض',
+    'interactionFeedback': 'الأصوات والاستجابة',
+    'interactionSounds': 'أصوات التفاعل',
+    'interactionSoundsSub':
+        'أصوات قصيرة ترافق الإجراءات المهمة من دون مقاطعة المكالمات.',
+    'interactionHaptics': 'الاستجابة اللمسية',
+    'interactionHapticsSub': 'اهتزاز خفيف يؤكد الاختيارات وعمليات التحقق.',
     'security': 'الأمان',
     'clientPreferences': 'تفضيلات العميل',
     'notifications': 'الإشعارات',
@@ -1583,6 +1638,9 @@ const Map<String, Map<String, String>> appTranslations = {
     'helpCenterSub': 'الأدلة والتواصل ومتابعة الطلبات.',
     'aboutSub': 'الإصدار 1.0.0، Tranviko.',
     'privacySub': 'البيانات والموقع والمكالمات والإشعارات.',
+    'deleteAccount': 'حذف حسابي',
+    'deleteAccountSub': 'طلب حذف الحساب والبيانات المرتبطة به.',
+    'deleteAccountOpenFailed': 'تعذر فتح صفحة حذف الحساب.',
     'agentSpace': 'مساحة الوكيل',
     'directorSpace': 'مساحة المدير',
     'messaging': 'المراسلة',
@@ -1970,6 +2028,11 @@ const Map<String, Map<String, String>> appTranslations = {
     'permissionCameraSub': 'المسح والصور ومكالمات الفيديو.',
     'permissionLocationTitle': 'الموقع',
     'permissionLocationSub': 'تتبع GPS والرحلات المشتركة والخرائط.',
+    'locationDisclosureTitle': 'استخدام الموقع',
+    'locationDisclosureBody':
+        'يستخدم Tranviko location للخرائط والرحلات المشتركة. عندما يقوم وكيل بتفعيل تتبع GPS لرحلة، يجمع Tranviko location في background، حتى عندما يكون التطبيق مغلقا او غير مستخدم، لعرض موقع الحافلة للمسافرين والشركة. لا تستخدم هذه البيانات للاعلانات.',
+    'locationDisclosureContinue': 'متابعة',
+    'locationDisclosureDecline': 'ليس الان',
     'permissionContactsTitle': 'جهات الاتصال',
     'permissionContactsSub': 'العثور على جهات اتصال موجودة على Tranviko.',
     'permissionMediaTitle': 'الصور والفيديوهات',
@@ -1978,6 +2041,13 @@ const Map<String, Map<String, String>> appTranslations = {
   'pt': {
     'settingsTitle': 'Definicoes',
     'display': 'Visual',
+    'interactionFeedback': 'Sons e resposta',
+    'interactionSounds': 'Sons de interacao',
+    'interactionSoundsSub':
+        'Sons curtos acompanham acoes importantes sem interromper chamadas.',
+    'interactionHaptics': 'Resposta haptica',
+    'interactionHapticsSub':
+        'Uma vibracao leve confirma selecoes e validacoes.',
     'security': 'Seguranca',
     'clientPreferences': 'Preferencias do cliente',
     'notifications': 'Notificacoes',
@@ -2029,6 +2099,10 @@ const Map<String, Map<String, String>> appTranslations = {
     'helpCenterSub': 'Guias, contacto e acompanhamento.',
     'aboutSub': 'Versao 1.0.0, Tranviko.',
     'privacySub': 'Dados, localizacao, chamadas e notificacoes.',
+    'deleteAccount': 'Eliminar a minha conta',
+    'deleteAccountSub': 'Pedir a eliminacao da conta e dos dados associados.',
+    'deleteAccountOpenFailed':
+        'Nao foi possivel abrir a pagina de eliminacao da conta.',
     'agentSpace': 'Espaco agente',
     'directorSpace': 'Espaco diretor',
     'messaging': 'Mensagens',
@@ -2474,6 +2548,11 @@ const Map<String, Map<String, String>> appTranslations = {
     'permissionCameraSub': 'Scan, fotos e chamadas de video.',
     'permissionLocationTitle': 'Localizacao',
     'permissionLocationSub': 'Seguimento GPS, viagem partilhada e mapas.',
+    'locationDisclosureTitle': 'Utilizacao da localizacao',
+    'locationDisclosureBody':
+        'O Tranviko usa a sua location para mapas, partida e partilha de viagens. Quando um agente ativa o seguimento GPS de uma viagem, o Tranviko recolhe location em background, mesmo quando a aplicacao esta fechada ou nao esta em uso, para mostrar a posicao do autocarro aos passageiros e a companhia. Estes dados nao sao usados para publicidade.',
+    'locationDisclosureContinue': 'Continuar',
+    'locationDisclosureDecline': 'Agora nao',
     'permissionContactsTitle': 'Contactos',
     'permissionContactsSub': 'Encontrar contactos ja no Tranviko.',
     'permissionMediaTitle': 'Fotos e videos',

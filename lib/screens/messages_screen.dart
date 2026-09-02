@@ -34,7 +34,10 @@ import '../services/local_cache_service.dart';
 import '../services/screen_awake_service.dart';
 import '../services/story_cache_service.dart';
 import '../utils/gps_speed.dart';
+import '../utils/call_id.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/location_permission_disclosure.dart';
+import '../widgets/tranviko_loading_skeleton.dart';
 import '../widgets/tranviko_map_tiles.dart';
 import 'audio_call_screen.dart';
 import 'trip_chat_screen.dart';
@@ -313,122 +316,42 @@ String _storyAudiencePrefsKey() {
   return 'travel_story_audience_${company}_$user';
 }
 
-OverlayEntry? _showStoryPickerLoading(BuildContext context, String label) {
-  final overlay = Overlay.maybeOf(context, rootOverlay: true);
-  if (overlay == null) return null;
-  final entry = OverlayEntry(
-    builder: (context) => IgnorePointer(
-      child: Material(
-        color: Colors.black.withValues(alpha: .22),
-        child: Center(
-          child: Container(
-            width: 252,
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: _surfacePanel(context),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x33000000),
-                  blurRadius: 28,
-                  offset: Offset(0, 14),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 30,
-                  height: 30,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      color: _primaryText(context),
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
-  overlay.insert(entry);
-  return entry;
-}
-
 Future<_PickedAttachment?> _pickSingleStoryMedia(
   BuildContext context,
   String type,
 ) async {
   final photo = type == 'image';
-  OverlayEntry? loading;
   try {
-    final hasAccess =
-        await _galleryChannel.invokeMethod<bool>('hasMediaAccess') ?? false;
-    final granted =
-        hasAccess ||
-        (await _galleryChannel.invokeMethod<bool>('requestMediaAccess') ??
-            false);
-    if (!granted) return null;
-    if (!context.mounted) return null;
-    loading = _showStoryPickerLoading(
-      context,
-      photo ? 'Ouverture des photos...' : 'Ouverture des videos...',
-    );
-    final raw = await _galleryChannel.invokeMethod<List<dynamic>>('listMedia', {
-      'kind': photo ? 'image' : 'video',
-      'limit': 160,
-    });
-    loading?.remove();
-    loading = null;
-    final items = (raw ?? const [])
-        .whereType<Map>()
-        .map((item) => _GalleryMediaItem.fromNative(item))
-        .where((item) => item.uri.isNotEmpty)
-        .toList();
-    if (!context.mounted || items.isEmpty) return null;
-    final selected = await Navigator.push<List<_GalleryMediaItem>>(
-      context,
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => _CustomMediaGalleryScreen(
-          items: items,
-          multiSelect: false,
-          title: photo ? 'Choisir une photo' : 'Choisir une video',
-        ),
-      ),
-    );
-    if (!context.mounted || selected == null || selected.isEmpty) return null;
-    final item = selected.first;
-    final bytes = await _galleryChannel.invokeMethod<Uint8List>('readMedia', {
-      'uri': item.uri,
-    });
-    if (bytes == null || bytes.isEmpty) return null;
+    final item = photo
+        ? await ImagePicker().pickImage(
+            source: ImageSource.gallery,
+            imageQuality: 88,
+          )
+        : await ImagePicker().pickVideo(source: ImageSource.gallery);
+    if (item == null) return null;
+    final bytes = await item.readAsBytes();
+    if (!context.mounted || bytes.isEmpty) return null;
+    final name = item.name.isNotEmpty
+        ? item.name
+        : (photo ? 'story.jpg' : 'story.mp4');
     return _PickedAttachment(
       bytes: bytes,
-      name: item.name.isNotEmpty
-          ? item.name
-          : (item.isVideo ? 'story.mp4' : 'story.jpg'),
-      mime: item.mime.isNotEmpty
-          ? item.mime
-          : (item.isVideo ? 'video/mp4' : 'image/jpeg'),
-      localPath: item.uri,
+      name: name,
+      mime:
+          item.mimeType ??
+          (photo ? 'image/jpeg' : _storyVideoMimeFromFileName(name)),
+      localPath: item.path,
     );
   } catch (_) {
     return null;
-  } finally {
-    loading?.remove();
   }
+}
+
+String _storyVideoMimeFromFileName(String name) {
+  final normalized = name.toLowerCase();
+  if (normalized.endsWith('.mov')) return 'video/quicktime';
+  if (normalized.endsWith('.webm')) return 'video/webm';
+  return 'video/mp4';
 }
 
 String _storyMediaExtension(Map<String, dynamic> story, String url) {
@@ -585,6 +508,7 @@ class _MessagesScreenState extends State<MessagesScreen>
   final Map<int, _PendingStoryUpload> _pendingStoryUploads = {};
   Set<int> _contactAttentionIds = {};
   Timer? _refreshTimer;
+  Timer? _socketRefreshDebounce;
   Timer? _storyReconnectTimer;
   StreamSubscription? _storySocketSub;
   WebSocketChannel? _storyChannel;
@@ -603,6 +527,7 @@ class _MessagesScreenState extends State<MessagesScreen>
   bool _storiesStripVisible = true;
   bool _redirectingToLogin = false;
   bool _conversationHorizontalSwipeActive = false;
+  AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
   double _lastConversationScrollOffset = 0;
   DateTime? _lastContactDiscoverySync;
   DateTime? _lastConversationMetaSync;
@@ -759,8 +684,23 @@ class _MessagesScreenState extends State<MessagesScreen>
     _load();
     _connectStorySocket();
     WidgetsBinding.instance.addPostFrameCallback((_) => _showShareHint());
-    _refreshTimer = Timer.periodic(const Duration(seconds: 8), (_) {
-      if (ApiService.activeToken != null) unawaited(_load());
+    _startFallbackRefresh();
+  }
+
+  void _startFallbackRefresh() {
+    _refreshTimer?.cancel();
+    if (_lifecycleState != AppLifecycleState.resumed) return;
+    _refreshTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      if (ApiService.activeToken != null && mounted) unawaited(_load());
+    });
+  }
+
+  void _scheduleSocketRefresh() {
+    _socketRefreshDebounce?.cancel();
+    _socketRefreshDebounce = Timer(const Duration(milliseconds: 180), () {
+      if (mounted && _lifecycleState == AppLifecycleState.resumed) {
+        unawaited(_load());
+      }
     });
   }
 
@@ -847,6 +787,7 @@ class _MessagesScreenState extends State<MessagesScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
+    _socketRefreshDebounce?.cancel();
     _closeStorySocket();
     _conversationScroll.dispose();
     _storyStripDismissSignal.dispose();
@@ -856,11 +797,16 @@ class _MessagesScreenState extends State<MessagesScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _lifecycleState = state;
     if (state == AppLifecycleState.resumed) {
+      _startFallbackRefresh();
       unawaited(_load());
       _connectStorySocket();
-    } else if (state == AppLifecycleState.paused ||
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
+      _refreshTimer?.cancel();
       _closeStorySocket();
     }
   }
@@ -891,6 +837,8 @@ class _MessagesScreenState extends State<MessagesScreen>
       final payload = jsonDecode(event.toString());
       if (payload is Map && payload['event'] == 'story_update') {
         unawaited(_loadTravelStories());
+      } else if (payload is Map && payload['event'] == 'message') {
+        _scheduleSocketRefresh();
       } else if (payload is Map && payload['event'] == 'contact_update') {
         unawaited(_load());
         unawaited(_loadConversationMeta(force: true));
@@ -2057,6 +2005,7 @@ class _MessagesScreenState extends State<MessagesScreen>
         if (!mounted) return;
         setState(() => _pendingSharedMedia = []);
         await LocalCacheService.writeList(_storyCacheKey, _travelStories);
+        if (!mounted) return;
         AppToast.show(
           context,
           prepared.length > 1
@@ -2448,7 +2397,7 @@ class _MessagesScreenState extends State<MessagesScreen>
                 },
               )
             : _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const TranvikoListSkeleton(itemCount: 6, showHeader: true)
             : RefreshIndicator(
                 onRefresh: _load,
                 child: Listener(
@@ -2562,7 +2511,7 @@ class _MessagesScreenState extends State<MessagesScreen>
                                           else
                                             _SwipeConversationTile(
                                               key: ValueKey(
-                                                'conversation-${conversationRows[i]['userId']}-${_archived}',
+                                                'conversation-${conversationRows[i]['userId']}-$_archived',
                                               ),
                                               item: conversationRows[i],
                                               archived: _archived,
@@ -3861,7 +3810,7 @@ class _TravelerContactsSheetState extends State<_TravelerContactsSheet> {
           target = _externalLetterKeys[letter]?.currentContext;
         }
       }
-      if (target != null) {
+      if (target != null && target.mounted) {
         await Scrollable.ensureVisible(
           target,
           duration: const Duration(milliseconds: 260),
@@ -4983,6 +4932,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final _controller = TextEditingController();
+  final _composerFocus = FocusNode();
   final _conversationSearchController = TextEditingController();
   final _scroll = ScrollController();
   final Set<int> _selected = {};
@@ -6638,146 +6588,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     bool video = false,
   }) async {
     Navigator.pop(context);
-    if (!Platform.isAndroid || (!photo && !video)) {
-      await _sendSystemPickedAttachment(photo: photo, video: video);
-      return;
-    }
-    _showMediaLoadingOverlay(
-      photo ? 'Chargement de vos photos...' : 'Chargement de vos videos...',
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 80));
-    try {
-      final hasAccess =
-          await _galleryChannel.invokeMethod<bool>('hasMediaAccess') ?? false;
-      final granted =
-          hasAccess ||
-          (await _galleryChannel.invokeMethod<bool>('requestMediaAccess') ??
-              false);
-      if (!granted) {
-        _hideMediaLoadingOverlay();
-        if (mounted) {
-          AppToast.show(
-            context,
-            'Autorisez les medias pour afficher la galerie Tranviko.',
-            tone: AppToastTone.warning,
-          );
-        }
-        return;
-      }
-      final raw = await _galleryChannel.invokeMethod<List<dynamic>>(
-        'listMedia',
-        {'kind': photo ? 'image' : 'video', 'limit': 120},
-      );
-      final items = (raw ?? const [])
-          .whereType<Map>()
-          .map((item) => _GalleryMediaItem.fromNative(item))
-          .where((item) => item.uri.isNotEmpty)
-          .toList();
-      if (items.isEmpty) {
-        _hideMediaLoadingOverlay();
-        if (mounted) {
-          AppToast.show(
-            context,
-            'Aucun media disponible dans cette categorie.',
-            tone: AppToastTone.info,
-          );
-        }
-        return;
-      }
-      if (!mounted) {
-        _hideMediaLoadingOverlay();
-        return;
-      }
-      _hideMediaLoadingOverlay();
-      final selected = await Navigator.push<List<_GalleryMediaItem>>(
-        context,
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (_) => _CustomMediaGalleryScreen(
-            items: items,
-            multiSelect: photo,
-            title: photo ? 'Selectionner des photos' : 'Selectionner une video',
-          ),
-        ),
-      );
-      if (!mounted || selected == null || selected.isEmpty) return;
-      _showMediaLoadingOverlay(
-        selected.length > 1
-            ? 'Preparation de ${selected.length} medias...'
-            : 'Preparation du media...',
-      );
-      final picked = <_PickedAttachment>[];
-      for (final item in selected) {
-        final bytes = await _galleryChannel.invokeMethod<Uint8List>(
-          'readMedia',
-          {'uri': item.uri},
-        );
-        if (bytes == null || bytes.isEmpty) continue;
-        picked.add(
-          _PickedAttachment(
-            bytes: bytes,
-            name: item.name.isNotEmpty
-                ? item.name
-                : (item.isVideo ? 'video.mp4' : 'photo.jpg'),
-            mime: item.mime.isNotEmpty
-                ? item.mime
-                : (item.isVideo ? 'video/mp4' : 'image/jpeg'),
-            localPath: item.uri,
-          ),
-        );
-      }
-      _hideMediaLoadingOverlay();
-      if (picked.isEmpty) return;
-      if (photo) {
-        final prepared = await Navigator.push<List<_PreparedAttachment>>(
-          context,
-          MaterialPageRoute(
-            fullscreenDialog: true,
-            builder: (_) => _MediaBatchPreparationScreen(items: picked),
-          ),
-        );
-        if (!mounted || prepared == null || prepared.isEmpty) return;
-        final albumId = prepared.length > 1
-            ? 'album-${DateTime.now().microsecondsSinceEpoch}'
-            : null;
-        for (var i = 0; i < prepared.length; i++) {
-          await _sendPreparedAttachment(
-            prepared[i],
-            albumId: albumId,
-            albumIndex: i,
-            albumTotal: prepared.length,
-          );
-        }
-        return;
-      }
-      final item = picked.first;
-      final prepared = await Navigator.push<_PreparedAttachment>(
-        context,
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (_) => _MediaPreparationScreen(
-            bytes: item.bytes,
-            name: item.name,
-            mime: item.mime,
-            localPath: item.localPath,
-          ),
-        ),
-      );
-      if (!mounted || prepared == null) return;
-      await _sendPreparedAttachment(prepared);
-    } catch (error) {
-      _hideMediaLoadingOverlay();
-      if (mounted) {
-        AppToast.show(
-          context,
-          AppToast.friendlyError(
-            error,
-            fallback: 'Impossible d ouvrir la galerie Tranviko.',
-          ),
-          tone: AppToastTone.error,
-        );
-      }
-    }
+    await _sendSystemPickedAttachment(photo: photo, video: video);
   }
 
   void _showMediaLoadingOverlay(String label) {
@@ -7469,6 +7280,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
+      if (!mounted) return false;
+      final disclosed = await showLocationPermissionDisclosure(context);
+      if (!disclosed) return false;
       permission = await Geolocator.requestPermission();
     }
     final allowed =
@@ -7520,6 +7334,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       activeOnly: true,
     );
     if (reservation == null) return;
+    if (!mounted) return;
     final duration = await showModalBottomSheet<int>(
       context: context,
       backgroundColor: _surfacePanel(context),
@@ -8165,109 +7980,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _createStickerFromGallery() async {
-    List<_GalleryMediaItem> selected = const [];
     try {
-      if (Platform.isAndroid) {
-        final hasAccess =
-            await _galleryChannel.invokeMethod<bool>('hasMediaAccess') ?? false;
-        final allowed = hasAccess
-            ? true
-            : (await _galleryChannel.invokeMethod<bool>('requestMediaAccess') ??
-                  false);
-        if (!allowed && mounted) {
-          AppToast.show(
-            context,
-            'Autorisez les photos ou choisissez un media avec le selecteur.',
-            tone: AppToastTone.warning,
-          );
-        }
-        if (allowed && mounted) {
-          final raw = await _galleryChannel.invokeMethod<List<dynamic>>(
-            'listMedia',
-            {'kind': 'all', 'limit': 300},
-          );
-          final items = (raw ?? const [])
-              .whereType<Map>()
-              .map(_GalleryMediaItem.fromNative)
-              .toList();
-          if (items.isNotEmpty) {
-            selected =
-                await Navigator.push<List<_GalleryMediaItem>>(
-                  context,
-                  MaterialPageRoute(
-                    fullscreenDialog: true,
-                    builder: (_) => _CustomMediaGalleryScreen(
-                      items: items,
-                      multiSelect: false,
-                      title: 'Creer un sticker',
-                    ),
-                  ),
-                ) ??
-                const [];
-          }
-        }
-      } else {
-        final result = await FilePicker.platform.pickFiles(
-          type: FileType.custom,
-          allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'mp4', 'mov'],
-          withData: true,
-        );
-        final file = result?.files.single;
-        if (file != null) {
-          selected = [
-            _GalleryMediaItem(
-              uri: file.path ?? '',
-              name: file.name,
-              mime: _mimeFromFileName(file.name),
-              isVideo: RegExp(
-                r'\.(mp4|mov|m4v|webm)$',
-                caseSensitive: false,
-              ).hasMatch(file.name),
-              size: file.size,
-              durationMs: 0,
-            ),
-          ];
-        }
-      }
-      if (mounted && selected.isEmpty) {
-        final picked = await ImagePicker().pickMedia();
-        if (picked != null) {
-          final name = picked.name;
-          selected = [
-            _GalleryMediaItem(
-              uri: picked.path,
-              name: name,
-              mime: _mimeFromFileName(name),
-              isVideo: RegExp(
-                r'\.(mp4|mov|m4v|webm)$',
-                caseSensitive: false,
-              ).hasMatch(name),
-              size: await picked.length(),
-              durationMs: 0,
-            ),
-          ];
-        }
-      }
-      if (!mounted || selected.isEmpty) return;
-      final source = selected.first;
-      Uint8List? bytes;
-      if (Platform.isAndroid && source.uri.startsWith('content:')) {
-        bytes = await _galleryChannel.invokeMethod<Uint8List>('readMedia', {
-          'uri': source.uri,
-        });
-      } else if (source.uri.isNotEmpty && await File(source.uri).exists()) {
-        bytes = await File(source.uri).readAsBytes();
-      }
-      if (!mounted || bytes == null || bytes.isEmpty) {
-        if (mounted) {
-          AppToast.show(
-            context,
-            'Impossible de lire ce media.',
-            tone: AppToastTone.error,
-          );
-        }
-        return;
-      }
+      final picked = await ImagePicker().pickMedia();
+      if (picked == null) return;
+      final name = picked.name.isEmpty ? 'sticker-media' : picked.name;
+      final isVideo = RegExp(
+        r'\.(mp4|mov|m4v|webm)$',
+        caseSensitive: false,
+      ).hasMatch(name);
+      final source = _GalleryMediaItem(
+        uri: picked.path,
+        name: name,
+        mime: picked.mimeType ?? _mimeFromFileName(name),
+        isVideo: isVideo,
+        size: await picked.length(),
+        durationMs: 0,
+      );
+      final bytes = await picked.readAsBytes();
+      if (!mounted || bytes.isEmpty) return;
       _PreparedAttachment? prepared;
       if (source.isVideo) {
         prepared = await Navigator.push<_PreparedAttachment>(
@@ -8275,7 +8005,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           MaterialPageRoute(
             fullscreenDialog: true,
             builder: (_) => _StickerVideoEditor(
-              bytes: bytes!,
+              bytes: bytes,
               name: source.name,
               localPath: source.uri.startsWith('content:') ? null : source.uri,
             ),
@@ -8483,8 +8213,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _hideComposerPanel();
     final mime = item['mime']?.toString() ?? 'image/gif';
     var name = item['name']?.toString() ?? 'tranviko.gif';
-    if (!name.contains('.'))
+    if (!name.contains('.')) {
       name = '$name.${mime.contains('webp') ? 'webp' : 'gif'}';
+    }
     await _sendPreparedAttachment(
       _PreparedAttachment(
         bytes: bytes,
@@ -8700,6 +8431,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _startReply(Map<String, dynamic> message) {
     if (_isDeletedMessage(message)) return;
     setState(() => _replyTo = _replyPayload(message));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _composerFocus.requestFocus();
+    });
   }
 
   void _scrollToRepliedMessage(Map<String, dynamic> reply) {
@@ -8741,7 +8476,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final targetMessage = _messages[targetIndex];
     final key = _messageKeys[targetMessage['id']?.toString() ?? id];
     final targetContext = key?.currentContext;
-    if (targetContext == null) return;
+    if (targetContext == null || !targetContext.mounted) return;
     Scrollable.ensureVisible(
       targetContext,
       duration: const Duration(milliseconds: 360),
@@ -8932,6 +8667,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _scroll.removeListener(_syncScrollButton);
     _scroll.removeListener(_maybeLoadOlderMessages);
     _controller.dispose();
+    _composerFocus.dispose();
     _conversationSearchController.dispose();
     _scroll.dispose();
     super.dispose();
@@ -9164,8 +8900,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   IconButton(
                     tooltip: 'Appel audio',
                     onPressed: () {
-                      final callId =
-                          'call-${DateTime.now().microsecondsSinceEpoch}';
+                      final callId = newCallId();
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -9185,8 +8920,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   IconButton(
                     tooltip: 'Appel video',
                     onPressed: () {
-                      final callId =
-                          'call-${DateTime.now().microsecondsSinceEpoch}';
+                      final callId = newCallId();
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -9408,6 +9142,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         : _Composer(
                             key: const ValueKey('composer'),
                             controller: _controller,
+                            focusNode: _composerFocus,
                             onTool: _showTools,
                             hasText: _hasText,
                             previewUrl: _composerPreviewUrl,
@@ -10710,8 +10445,9 @@ class _MyTravelStoriesScreenState extends State<_MyTravelStoriesScreen> {
     setState(() => _busy.add(id));
     try {
       await widget.onDelete(story);
-      if (mounted)
+      if (mounted) {
         setState(() => _stories.removeWhere((item) => item['id'] == id));
+      }
     } finally {
       if (mounted) setState(() => _busy.remove(id));
     }
@@ -12818,6 +12554,10 @@ Future<_StoryPublishOptions?> _showTravelStoryOptions(
 }) async {
   final controller = TextEditingController(text: initialCaption);
   final cached = await LocalCacheService.readMap(_storyAudiencePrefsKey());
+  if (!context.mounted) {
+    controller.dispose();
+    return null;
+  }
   var reshare = cached?['allowReshare'] == true;
   var audienceMode = (cached?['audienceMode'] ?? 'friends').toString();
   if (!{'friends', 'include', 'exclude'}.contains(audienceMode)) {
@@ -13109,8 +12849,9 @@ class _ConversationInfoScreenState extends State<_ConversationInfoScreen> {
       }
       await _load();
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         AppToast.show(context, 'Action impossible.', tone: AppToastTone.error);
+      }
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -13847,8 +13588,9 @@ class _SmartMessageText extends StatelessWidget {
     }
     if (text.startsWith('http')) {
       final uri = Uri.tryParse(text);
-      if (uri != null)
+      if (uri != null) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
       return;
     }
     if (RegExp(r'^\+?\d').hasMatch(text)) {
@@ -13857,8 +13599,9 @@ class _SmartMessageText extends StatelessWidget {
       return;
     }
     await Clipboard.setData(ClipboardData(text: text));
-    if (context.mounted)
+    if (context.mounted) {
       AppToast.show(context, 'Date copiee.', tone: AppToastTone.success);
+    }
   }
 
   @override
@@ -14853,6 +14596,7 @@ class _StickerMessageActionsSheet extends StatelessWidget {
 
 class _Composer extends StatelessWidget {
   final TextEditingController controller;
+  final FocusNode focusNode;
   final VoidCallback onTool;
   final bool hasText;
   final String previewUrl;
@@ -14862,6 +14606,7 @@ class _Composer extends StatelessWidget {
   const _Composer({
     super.key,
     required this.controller,
+    required this.focusNode,
     required this.onTool,
     required this.hasText,
     required this.previewUrl,
@@ -14949,6 +14694,7 @@ class _Composer extends StatelessWidget {
                   ),
                   child: TextField(
                     controller: controller,
+                    focusNode: focusNode,
                     minLines: 1,
                     maxLines: 4,
                     style: TextStyle(color: scheme.onSurface),
@@ -17114,23 +16860,6 @@ class _GalleryMediaItem {
     this.album = 'Galerie',
     this.favorite = false,
   });
-
-  factory _GalleryMediaItem.fromNative(Map<dynamic, dynamic> item) {
-    final thumbnail = item['thumbnail'];
-    return _GalleryMediaItem(
-      uri: item['uri']?.toString() ?? '',
-      name: item['name']?.toString() ?? '',
-      mime: item['mime']?.toString() ?? '',
-      isVideo: item['isVideo'] == true,
-      size: (item['size'] as num?)?.toInt() ?? 0,
-      durationMs: (item['durationMs'] as num?)?.toInt() ?? 0,
-      thumbnail: thumbnail is Uint8List ? thumbnail : null,
-      album: item['album']?.toString().trim().isNotEmpty == true
-          ? item['album'].toString()
-          : 'Galerie',
-      favorite: item['favorite'] == true,
-    );
-  }
 }
 
 class _CustomMediaGalleryScreen extends StatefulWidget {
@@ -20535,7 +20264,7 @@ class _TravelToolCard extends StatelessWidget {
                   style: TextStyle(
                     color: textColor,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: .6,
+                    letterSpacing: 0,
                   ),
                 ),
               ),

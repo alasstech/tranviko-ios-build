@@ -18,6 +18,7 @@ import '../services/native_call_service.dart';
 import '../services/push_notification_service.dart';
 import '../services/screen_awake_service.dart';
 import '../services/websocket_connector.dart';
+import '../utils/call_id.dart';
 
 class AudioCallScreen extends StatefulWidget {
   final int? targetId;
@@ -345,9 +346,7 @@ class _AudioCallScreenState extends State<AudioCallScreen>
 
   Future<void> _connect() async {
     try {
-      _callId =
-          widget.initialCallId ??
-          'call-${DateTime.now().microsecondsSinceEpoch}';
+      _callId = widget.initialCallId ?? newCallId();
       _remotePeerId = widget.targetId ?? widget.callerId;
       await _connectSignalSocket();
       if (ApiService.useLiveKitForCalls) {
