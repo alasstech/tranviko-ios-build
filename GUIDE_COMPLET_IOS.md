@@ -95,8 +95,33 @@ Developer peut recevoir l'acces aux certificats et profils selon les droits
 accordes. Si le compte est inscrit comme **individu**, les personnes ajoutees
 dans App Store Connect ne deviennent pas automatiquement membres de l'equipe
 Apple Developer. Dans ce cas, ne partagez jamais le compte du proprietaire : le
-developpeur peut preparer et verifier le projet, puis le proprietaire signe sur
-son Mac, ou vous utilisez une solution de signature geree approuvee par Apple.
+developpeur peut preparer le projet, mais la signature doit suivre la procedure
+manuelle ci-dessous ou etre effectuee par le proprietaire.
+
+### 4.4 Signature si le compte est individuel
+
+Le mot de passe Apple du proprietaire ne doit jamais etre communique. Utiliser
+plutot cette procedure :
+
+1. Sur le Mac, le developpeur ouvre Trousseaux d'acces > Assistant de
+   certification > Demander un certificat a une autorite de certification.
+2. Il enregistre le fichier CSR et transmet uniquement ce CSR au proprietaire.
+3. Pour tester sur iPhone, il transmet aussi les UDID des deux appareils.
+4. Le proprietaire cree dans le portail Apple un certificat Apple Development
+   avec ce CSR, enregistre les iPhone, puis cree un profil iOS App Development
+   pour `app.tranviko.mobile` avec Push Notifications.
+5. Pour TestFlight, le proprietaire cree aussi un certificat Apple Distribution
+   avec le CSR et un profil App Store Connect pour le meme Bundle ID.
+6. Les fichiers `.cer` et `.mobileprovision` sont transmis par un canal prive,
+   jamais par GitHub, email public ou messagerie non chiffree.
+7. Le developpeur installe les certificats/profils, choisit la signature manuelle
+   dans Xcode et verifie les entitlements de l'archive avant l'upload.
+8. Le proprietaire invite tout de meme son Apple Account avec le role Developer
+   limite a Tranviko afin qu'il puisse televerser le build dans App Store Connect.
+
+La cle privee creee avec le CSR reste dans le trousseau du Mac. A la fin de la
+mission, le proprietaire peut revoquer les certificats et retirer les acces sans
+revoquer la cle APNs du serveur.
 
 ## 5. Creer la cle APNs `.p8`
 
@@ -352,4 +377,6 @@ Un arret force manuel par l'utilisateur peut etre traite differemment par iOS se
 - Authentification APNs par jeton : https://developer.apple.com/help/account/capabilities/communicate-with-apns-using-authentication-tokens/
 - Build IPA Flutter : https://docs.flutter.dev/deployment/ios
 - Upload App Store Connect : https://developer.apple.com/help/app-store-connect/manage-builds/upload-builds/
+- Comptes individuels et acces App Store Connect : https://developer.apple.com/help/app-store-connect/manage-your-team/add-and-edit-users/
+- Roles Apple Developer : https://developer.apple.com/help/account/access/roles
 - Firebase pour Apple : https://firebase.google.com/docs/cloud-messaging/ios/get-started
