@@ -177,7 +177,9 @@ class ApiService {
         : value.trim();
     final withScheme = raw.contains('://') ? raw : 'https://$raw';
     final uri = Uri.parse(withScheme);
-    final scheme = uri.scheme == 'http' ? 'http' : 'https';
+    // Release/profile traffic is HTTPS-only. Local HTTP remains available in
+    // debug builds for development on an emulator or a trusted LAN.
+    final scheme = kDebugMode && uri.scheme == 'http' ? 'http' : 'https';
     final host = uri.host.isEmpty ? 'tranviko.app' : uri.host;
     final hasUsefulPort =
         uri.hasPort &&

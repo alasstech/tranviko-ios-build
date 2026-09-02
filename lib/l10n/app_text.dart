@@ -528,7 +528,7 @@ const Map<String, Map<String, String>> appTranslations = {
     'permissionLocationSub': 'Suivi GPS, trajet partage et cartes.',
     'locationDisclosureTitle': 'Utilisation de la position',
     'locationDisclosureBody':
-        'Tranviko utilise votre location pour les cartes, le depart et le partage de trajet. Lorsqu un agent active le suivi GPS d un trajet, Tranviko collecte la location en background, meme lorsque l application est fermee ou non utilisee, afin d afficher la position du bus aux voyageurs et a la compagnie. Ces donnees ne sont pas utilisees pour la publicite.',
+        'Tranviko utilise votre position pour les cartes, le depart et le partage de trajet. Lorsqu un agent demarre le suivi GPS, il continue avec une notification visible si l application passe en arriere-plan ou si l ecran est verrouille. Le suivi s arrete a la fin du trajet ou si l application est forcee a s arreter. Ces donnees ne sont pas utilisees pour la publicite.',
     'locationDisclosureContinue': 'Continuer',
     'locationDisclosureDecline': 'Pas maintenant',
     'permissionContactsTitle': 'Contacts',
@@ -1047,7 +1047,7 @@ const Map<String, Map<String, String>> appTranslations = {
     'permissionLocationSub': 'GPS tracking, shared trips and maps.',
     'locationDisclosureTitle': 'Location use',
     'locationDisclosureBody':
-        'Tranviko uses your location for maps, departure suggestions and trip sharing. When an agent starts GPS tracking for a trip, Tranviko collects location in the background, even when the app is closed or not in use, to show the bus position to passengers and the company. This data is not used for advertising.',
+        'Tranviko uses your location for maps, departure suggestions and trip sharing. When an agent starts GPS tracking, it continues with a visible notification while the app is in the background or the screen is locked. Tracking stops when the trip ends or the app is force-stopped. This data is not used for advertising.',
     'locationDisclosureContinue': 'Continue',
     'locationDisclosureDecline': 'Not now',
     'permissionContactsTitle': 'Contacts',
@@ -1570,7 +1570,7 @@ const Map<String, Map<String, String>> appTranslations = {
     'permissionLocationSub': 'Seguimiento GPS, trayecto compartido y mapas.',
     'locationDisclosureTitle': 'Uso de la ubicacion',
     'locationDisclosureBody':
-        'Tranviko usa tu location para mapas, salida y viajes compartidos. Cuando un agente activa el seguimiento GPS de un viaje, Tranviko recopila location en background, incluso cuando la app esta cerrada o no esta en uso, para mostrar la posicion del bus a pasajeros y a la compania. Estos datos no se usan para publicidad.',
+        'Tranviko usa tu ubicacion para mapas, salidas y viajes compartidos. Cuando un agente inicia el seguimiento GPS, este continua con una notificacion visible si la app pasa a segundo plano o la pantalla esta bloqueada. El seguimiento se detiene al terminar el viaje o si se fuerza la detencion de la app. Estos datos no se usan para publicidad.',
     'locationDisclosureContinue': 'Continuar',
     'locationDisclosureDecline': 'Ahora no',
     'permissionContactsTitle': 'Contactos',
@@ -2030,7 +2030,7 @@ const Map<String, Map<String, String>> appTranslations = {
     'permissionLocationSub': 'تتبع GPS والرحلات المشتركة والخرائط.',
     'locationDisclosureTitle': 'استخدام الموقع',
     'locationDisclosureBody':
-        'يستخدم Tranviko location للخرائط والرحلات المشتركة. عندما يقوم وكيل بتفعيل تتبع GPS لرحلة، يجمع Tranviko location في background، حتى عندما يكون التطبيق مغلقا او غير مستخدم، لعرض موقع الحافلة للمسافرين والشركة. لا تستخدم هذه البيانات للاعلانات.',
+        'يستخدم Tranviko موقعك للخرائط ومشاركة الرحلة. عندما يبدأ الوكيل تتبع GPS، يستمر التتبع مع إشعار ظاهر عند انتقال التطبيق إلى الخلفية أو قفل الشاشة. يتوقف التتبع عند انتهاء الرحلة أو فرض إيقاف التطبيق. لا تستخدم هذه البيانات للإعلانات.',
     'locationDisclosureContinue': 'متابعة',
     'locationDisclosureDecline': 'ليس الان',
     'permissionContactsTitle': 'جهات الاتصال',
@@ -2550,7 +2550,7 @@ const Map<String, Map<String, String>> appTranslations = {
     'permissionLocationSub': 'Seguimento GPS, viagem partilhada e mapas.',
     'locationDisclosureTitle': 'Utilizacao da localizacao',
     'locationDisclosureBody':
-        'O Tranviko usa a sua location para mapas, partida e partilha de viagens. Quando um agente ativa o seguimento GPS de uma viagem, o Tranviko recolhe location em background, mesmo quando a aplicacao esta fechada ou nao esta em uso, para mostrar a posicao do autocarro aos passageiros e a companhia. Estes dados nao sao usados para publicidade.',
+        'O Tranviko usa a sua localizacao para mapas, partidas e partilha de viagens. Quando um agente inicia o seguimento GPS, este continua com uma notificacao visivel se a aplicacao passar para segundo plano ou o ecra estiver bloqueado. O seguimento para no fim da viagem ou se a aplicacao for forcada a parar. Estes dados nao sao usados para publicidade.',
     'locationDisclosureContinue': 'Continuar',
     'locationDisclosureDecline': 'Agora nao',
     'permissionContactsTitle': 'Contactos',
